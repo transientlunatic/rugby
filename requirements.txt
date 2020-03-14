@@ -5,3 +5,4 @@ pandas
 pyyaml
 flask
 flask-API
+click
