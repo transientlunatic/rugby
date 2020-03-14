@@ -1,0 +1,7 @@
+bs4
+requests
+dateparser
+pandas
+pyyaml
+flask
+flask-API
