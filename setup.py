@@ -32,9 +32,9 @@ setup(
     packages=find_packages(),
     use_scm_version=True,
     setup_requires=['setuptools_scm', 'click'],
-    package_dir={
-        'rugby': 'rugby'
-    },
+    # package_dir={
+    #     'rugby': 'rugby'
+    # },
     include_package_data=True,
     install_requires=requirements,
     entry_points='''

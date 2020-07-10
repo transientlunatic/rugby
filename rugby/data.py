@@ -1,3 +1,5 @@
+import ast
+
 import pandas as pd
 import numpy as np
 from itertools import chain
@@ -13,7 +15,7 @@ class Scores(object):
             self.total = self.scores['cumulative'].iloc[-1]
         except:
             self.total = 0
-            
+        
         
     def __repr__(self):
         out = []
@@ -29,7 +31,7 @@ class Scores(object):
         return "<table>" + ("\n").join(out) + "</table>" #, "\n")
     
     def _repr_html_(self):
-        return self.html()
+        return self.html
 
 class Match(object):
     
@@ -59,6 +61,11 @@ class Match(object):
             self.scores = {'home': Scores(row['home']['scores']),
                            'away': Scores(row['away']['scores'])
             }
+            for i, score in self.scores['home'].scores.iterrows():
+                self.scores['home'].scores.at[i, 'player'] = (self.find_player(score['player']))
+            for i, score in self.scores['away'].scores.iterrows():
+                self.scores['away'].scores.at[i, 'player'] = (self.find_player(score['player']))
+                
         else:
             self.scores = None
         try:
@@ -66,6 +73,11 @@ class Match(object):
         except:
             self.url = None
 
+    def find_player(self, search):
+        for i, player in pd.concat([self.lineups['home'].lineup, self.lineups['away'].lineup]).iterrows():
+            if search in player['name']: 
+                return player['name']
+            
     def all_scores(self):
         """
         Get a list of all of the scoring events in this match.
@@ -112,7 +124,7 @@ class Lineup(object):
         """
         Represent a team's lineup
         """
-        self.lineup = pd.DataFrame.from_dict(data, orient='index', dtype=object)
+        self.lineup = pd.DataFrame.from_dict(data, orient='index')
         # print(self.lineup.name.values)
         self.lineup.index = np.array(self.lineup.index, dtype=int)
         self.lineup.sort_index(inplace=True)
@@ -121,13 +133,38 @@ class Lineup(object):
         for key, value in self.lineup.iterrows():
             time = []
             total_time = 0
+            if isinstance(value['on'], (type(None), int, float)):
+                if isinstance(value['on'], type(None)):
+                    value['on'] = "NaN"
+                value['on'] = [float(value['on'])]
+            if isinstance(value['off'], (type(None), int, float)):
+                if isinstance(value['off'], type(None)):
+                    value['off'] = "NaN"
+                value['off'] = [float(value['off'])]
+
+            
+            
+            try:
+                if not pd.isna(value['on']) and pd.isna(value['off']):
+                    value['off'] = [80]
+            except:
+                print(value)
+            if isinstance(value['on'], str):
+                value['on'] = ast.literal_eval(value['on'])
+            if isinstance(value['off'], str):
+                value['off'] = ast.literal_eval(value['off'])
+
+            try:
+                if len(value['on'])<len(value['off']): value['off']+=[80]
+            except TypeError:
+                print(value)
             subs = sorted(value['on'] + value['off'])
             if len(subs)%2: subs.append(80)
             for i in range(int(len(subs)/2)):
                     time.append([subs[i], subs[i+1]])
                     total_time += (subs[i+1] - subs[i])
+            if pd.isna(total_time): total_time = 0
             self.lineup.at[key, 'game time'] = total_time
-            #self.lineup.at[key, 'game time'] = ";".join([" → ".join([str(t) for t in ti]) for ti in time])
 
     def players(self):
         players = [Player(name) for name in self.lineup.name.values]
@@ -146,7 +183,7 @@ class Lineup(object):
     def html(self):
         out = []
         header = """
-        <tr><th>Pos</th><th>Player</th><th>Times</th></tr>
+        <tr><th>Pos</th><th>Player</th><th>Play time</th></tr>
         """
         for key, value in self.lineup.iterrows():
             
@@ -158,9 +195,9 @@ class Lineup(object):
             value['game time rep']= " ".join(time)
             
             if key == 15: 
-                out.append('<tr style="border-bottom: 1px solid #000;"><td>{a}</td><td>{b[name]}</td><td>{b[game time rep]}</td></tr>'.format(a=key, b=value))
+                out.append('<tr style="border-bottom: 1px solid #000;"><td>{a}</td><td>{b[name]}</td><td>{b[game time]}</td></tr>'.format(a=key, b=value))
             else:
-                out.append("<tr><td>{a}</td><td>{b[name]}</td><td>{b[game time rep]}</td></tr>".format(a=key, b=value))
+                out.append("<tr><td>{a}</td><td>{b[name]}</td><td>{b[game time]}</td></tr>".format(a=key, b=value))
         return "<table>" +  header + ("\n").join(out) + "</table>" #, "\n")
     
     def _repr_html_(self):
@@ -289,7 +326,8 @@ class Score():
         self.type = type
         self.value = value
         self.minute = minute
-        
+
+
     def __repr__(self):
         return "{} by {} ({}-{})".format(self.type, self.player.name, self.match.home, self.match.away)
 
@@ -328,6 +366,8 @@ class Tournament():
     def __init__(self, name, season, matches):
         
         self.matches = [Match(x) for i, x in matches.iterrows()]
+        self.season=season
+        self.name = name
         
     def teams(self):
         """
@@ -345,15 +385,24 @@ class Tournament():
         #positions = chain(*positions)
         return positions #list(positions)
 
-    def matrix(self):
-        matrix = {}
-        for match in self.matches:
-            if not match.teams['home'] in matrix:
-                matrix[match.teams['home']] = {}
+    def fixtures_table(self):
+        data = [[pd.to_datetime(match.date), match.teams['home'], match.teams['away']] for match in self.matches]
+        return pd.DataFrame(data, columns=["date", "home", "away"])
+    
+    def results_table(self):
+        scores = [[match.teams['home'], match.teams['away'], match.scores['home'].total, match.scores['away'].total, match.scores['home'].total-match.scores['away'].total] for match in self.matches]
+        return pd.DataFrame(scores, columns=["home", "away", "home_score", "away_score", "difference"])
+    
+    # def matrix(self):
+    #     scores = [[match.teams['home'], match.teams['away'], match.scores['home'].total, match.scores['away'].total, match.scores['home'].total-match.scores['away'].total] for match in self.matches]
+    #     matrix = {}
+    #     for match in self.matches:
+    #         if not match.teams['home'] in matrix:
+    #             matrix[match.teams['home']] = {}
 
-            matrix[match.teams['home']][match.teams['away']] = {"home":int(match.scores['home'].total),
-                                                                "away": int(match.scores['away'].total)}
-        return matrix
+    #         matrix[match.teams['home']][match.teams['away']] = {"home":int(match.scores['home'].total),
+    #                                                             "away": int(match.scores['away'].total)}
+    #     return matrix
     
     def scores(self):
         scores = []
