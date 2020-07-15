@@ -6,9 +6,14 @@
 Welcome to rugby's documentation!
 =================================
 
+This is a python package designed to help analyse data from rugby matches.
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
+
+   data
+   plotting
 
 
 
