@@ -4,6 +4,36 @@ import matplotlib
 import pandas as pd
 import datetime
 
+from cycler import cycler
+
+style = {
+    "xtick.labelsize":10,
+    "xtick.major.size": 5,
+    "xtick.minor.visible": True,
+    "xtick.color": "k",
+    "ytick.labelsize":10,
+    "ytick.major.size": 5,
+    "ytick.minor.visible": True,
+    # Lines
+    "lines.linewidth": 2,
+    "axes.prop_cycle": cycler("color", ['#8dd3c7', '#ffffb3', '#bebada',
+                                        '#fb8072', '#80b1d3', '#fdb462',
+                                        '#b3de69', '#fccde5', '#d9d9d9',
+                                        '#bc80bd', '#ccebc5', '#ffed6f']),
+    # Fonts
+    "font.monospace": ["Source code pro"],
+    "font.sans-serif": ["Source sans pro"],
+    "font.family": "monospace",
+    # Grid
+    "grid.color": "#4298bd",
+    "grid.alpha": 0.5,
+    # Display
+    "figure.dpi": 300,
+    # Face colors
+    "axes.facecolor": "#ecf5f8",
+    "figure.facecolor": "#FFFFFFFF"
+}
+
 def heatmap(data, row_labels, col_labels, ax=None,
             cbar_kw={}, cbarlabel="", **kwargs):
     """
@@ -203,7 +233,7 @@ def league_heatmap(results, league, season):
     fig.tight_layout()
     return fig
 
-def tournament_heatmap(tournament, fixtures=None):
+def tournament_heatmap(tournament):
     results = tournament.results_table()
     pivot = results.pivot_table(index="home", columns="away", values="difference", aggfunc="sum")#.fillna(0)
     home = results.pivot_table(index="home", columns="away", values="home_score", aggfunc="first").values
@@ -215,8 +245,8 @@ def tournament_heatmap(tournament, fixtures=None):
     second_away = results.pivot_table(index="home", columns="away", values="away_score", aggfunc="last")[multiples_away].values
     scorelines = []
 
-    if not isinstance(fixtures, type(None)):
-        fixtures_pivot = fixtures.fixtures_table().pivot(index="home",
+    if not isinstance(tournament.future, type(None)):
+        fixtures_pivot = tournament.fixtures_table(future=True).pivot(index="home",
                                                          columns="away", values="date").values
     else:
         fixtures_pivot = np.ones(len(home.flatten()))*np.nan
@@ -265,3 +295,154 @@ def tournament_heatmap(tournament, fixtures=None):
     fig.tight_layout()
     #fig.savefig("west3-2019.png")
     return fig
+
+
+def player_score_matrix_plot(tournament, team, ax=None, squad=False, **kw):
+    player_times = tournament.player_score_table(team)
+    if squad:
+        data = tournament.player_time_table(team).join(player_times, lsuffix="t", how='outer')
+        data = data[data.columns[-int(len(data.columns)/2):]]
+        player_times = data
+    labelfont = kw['labelfont']
+    del(kw['labelfont'])
+    if not ax:
+        f, ax = plt.subplots(1,1, dpi=300)
+    norm = matplotlib.colors.TwoSlopeNorm(vmin=0, vcenter=40, vmax=80)
+    im = ax.imshow(player_times.values, norm=norm, cmap="magma_r", alpha=0.7,)
+    ax.grid(False)
+    ax.tick_params(top=True, bottom=False,
+                   labeltop=True, labelbottom=False)
+
+    for edge, spine in ax.spines.items():
+            spine.set_visible(False)
+
+    ax.set_xticks(np.arange(player_times.shape[1]))
+    ax.set_yticks(np.arange(player_times.shape[0]))
+    ax.tick_params(which="minor", bottom=False, left=False)
+    ax.set_xticklabels(player_times.columns, fontdict=labelfont)
+    ax.set_yticklabels(player_times.index, fontdict=labelfont)
+
+    for edge, spine in ax.spines.items():
+            spine.set_visible(False)
+
+    ax.set_xticks(np.arange(player_times.shape[1]+1)-.5, minor=True)
+    ax.set_yticks(np.arange(player_times.shape[0]+1)-.5, minor=True)
+    ax.grid(which="minor", color="w", linestyle='-', linewidth=.5, alpha=1)
+    ax.tick_params(which="major", bottom=False, left=False, top=False)
+    ax.tick_params(which="minor", bottom=False, left=False, top=False)
+
+    plt.setp(ax.get_xticklabels(), rotation=-90, ha="right", va="center",
+                 rotation_mode="anchor");
+
+    def text_color(datum):
+        if datum  > 40: return "white"
+        else: return "black"
+
+    texts = []
+    times = player_times.values
+    for i in range(player_times.shape[0]):
+        for j in range(player_times.shape[1]):
+            if not np.isnan(times[i,j]): s=f"{times[i,j]:.0f}"
+            else: s="-"
+                
+            kw = dict(horizontalalignment="center",
+                  verticalalignment="center")
+            kw['fontdict'] = labelfont
+            kw['fontdict']["color"] = text_color(times[i,j])
+            text = im.axes.text(j, i, s, **kw)
+            texts.append(text)
+
+    ax.set_xlim(-0.5,ax.get_xlim()[1]+0.01);
+    
+    return ax
+
+
+def player_time_matrix_plot(tournament, team, ax=None, **kw):
+    """
+    Produce a time matrix plot for a given tournament.
+    
+    Parameters
+    ----------
+    tournament : `rugby.Tournament`
+       The tournament to draw matches from.
+    team : `str`
+       The name of the team.
+    ax : matplotlib axis, optional
+       The axis to draw the plot on.
+
+    Examples
+    --------
+
+    ::
+
+       from rugby.data import Tournament
+       import rugby.plotting
+       import pandas as pd
+
+       import matplotlib
+       import matplotlib.pyplot as plt
+       plt.style.use(rugby.plotting.style)
+
+       tournament = Tournament("Super Rugby Aotearoa", "2020", pd.read_json("/home/daniel/repositories/snippets/superrugby/superrugby_nz.json"))
+
+   
+       team = "Highlanders"
+       f, ax = plt.subplots(1,1, sharey=True, figsize=(1.5,6), dpi=300)
+       rugby.plotting.player_time_matrix_plot(tournament, team, ax, labelfont={"fontsize":5})
+       f.text(0.08, 0.99, "Minutes played", fontdict={"fontsize":5}, ha="left")
+       f.tight_layout()
+    """
+    
+    player_times = tournament.player_time_table(team)
+    labelfont = kw['labelfont']
+    del(kw['labelfont'])
+    if not(ax):
+        f, ax = plt.subplots(1,1, dpi=300)
+    norm = matplotlib.colors.TwoSlopeNorm(vmin=0, vcenter=40, vmax=80)
+    im = ax.imshow(player_times.values, norm=norm, cmap="magma_r", alpha=0.7,)
+    ax.grid(False)
+    ax.tick_params(top=True, bottom=False,
+                   labeltop=True, labelbottom=False)
+
+    for edge, spine in ax.spines.items():
+            spine.set_visible(False)
+
+    ax.set_xticks(np.arange(player_times.shape[1]))
+    ax.set_yticks(np.arange(player_times.shape[0]))
+    ax.tick_params(which="minor", bottom=False, left=False)
+    ax.set_xticklabels(player_times.columns, labelfont)
+    ax.set_yticklabels(player_times.index, labelfont)
+
+    for edge, spine in ax.spines.items():
+            spine.set_visible(False)
+
+    ax.set_xticks(np.arange(player_times.shape[1]+1)-.5, minor=True)
+    ax.set_yticks(np.arange(player_times.shape[0]+1)-.5, minor=True)
+    ax.grid(which="minor", color="w", linestyle='-', linewidth=.5, alpha=1)
+    ax.tick_params(which="major", bottom=False, left=False, top=False)
+    ax.tick_params(which="minor", bottom=False, left=False, top=False)
+
+    plt.setp(ax.get_xticklabels(), rotation=-90, ha="right", va="center",
+                 rotation_mode="anchor");
+
+    def text_color(datum):
+        if datum  > 40: return "white"
+        else: return "black"
+
+    texts = []
+    times = player_times.values
+    for i in range(player_times.shape[0]):
+        for j in range(player_times.shape[1]):
+            if not np.isnan(times[i,j]): s=f"{times[i,j]:.0f}"
+            else: s="-"
+            kw = dict(horizontalalignment="center",
+                  verticalalignment="center")
+            kw['fontdict'] = labelfont
+
+            kw['fontdict']["color"] = text_color(times[i,j])
+            text = im.axes.text(j, i, s, **kw)
+            texts.append(text)
+
+    ax.set_xlim(-0.5,ax.get_xlim()[1]+0.01);
+    
+    return ax
