@@ -231,7 +231,7 @@ def download_fixtures(season, league,
     urls = get_fixture_list(league=league, season=season)
     
     try:
-        games = pandas.read_json(rugby.__path__[0]+"/json/{}-fixtures.json".format(league), dtype=object)
+        games = pandas.read_json(rugby.__path__[0]+"/json-data/{}-fixtures.json".format(league), dtype=object)
     
         #matches = [rugby.data.Match(row) for index, row in data.iterrows()]
         match_urls = [game.url for i, game in games.iterrows()]
