@@ -10,8 +10,8 @@ import numpy as np
 
 from .player import Player
 from .scores import Scores
-from .utils import json_serial
-
+from .utils import json_serial, total_time_from_ranges
+from .team import Team
 
 class Match(object):
 
@@ -22,7 +22,10 @@ class Match(object):
         self.score = {"home": row['home']['score'],
                       "away": row['away']['score']}
 
-        if tournament and hasattr(tournament, "teams_dict"):
+        if isinstance(row['home']['team'], dict):
+            self.teams = {'home': Team.from_dict(row['home']['team']),
+                          'away': Team.from_dict(row['away']['team'])}
+        elif tournament and hasattr(tournament, "teams_dict"):
             self.teams = {'home': tournament.teams_dict[row['home']['team']],
                           'away': tournament.teams_dict[row['away']['team']]
                      }
@@ -92,7 +95,7 @@ class Match(object):
         data['season'] = self.season
         for state in ["home", "away"]:
             data[state] = {}
-            data[state]['team'] = self.teams[state]
+            data[state]['team'] = self.teams[state].to_dict()
             data[state]['score'] = self.score[state]
             if hasattr(self, "lineups"):
                 data[state]['lineup'] = self.lineups[state].to_dict()
@@ -137,7 +140,6 @@ class Match(object):
         with open(file, "r") as f:
             data = yaml.safe_load(f)
         data = pd.DataFrame.from_dict([data]).iloc[0]
-
         return cls(data)
 
     def players(self):
@@ -148,6 +150,21 @@ class Match(object):
         players += self.lineups['home'].players()
         players += self.lineups['away'].players()
         return players
+
+    def player_covariance(self, players):
+        """
+        Get the "covariance matrix" for players in this match.
+        """
+        matrix = np.zeros((len(players), len(players)))
+        for i, player1 in enumerate(players):
+            for j, player2 in enumerate(players):
+                if i==j: 
+                    matrix[i,j] = np.nan
+                if i<j:
+                    matrix[i,j] = player1.onfield_point_mutual_rate(player2, self)[0]
+                if i>j:
+                    matrix[i,j] = - player1.onfield_point_mutual_rate(player2, self)[1]
+        return matrix
             
     def __repr__(self):
         if self.scores:
@@ -190,53 +207,61 @@ class Lineup(object):
         self.lineup.sort_index(inplace=True)
         
         self.lineup['game time'] = 0
+        self.time_ranges = {}
         for key, value in self.lineup.iterrows():
-            time = []
-            total_time = 0
-
-            if isinstance(value['on'], (str)):
-                value['on'] = ast.literal_eval(value['on'])
-
-            if isinstance(value['off'], (str)):
-                value['off'] = ast.literal_eval(value['off'])
-                
-            if isinstance(value['on'], (type(None), int, float)):
-                if isinstance(value['on'], type(None)):
-                    valuea['on'] = "NaN"
-                value['on'] = [float(value['on'])]
-                
-            if isinstance(value['off'], (type(None), int, float, str)):
-                if isinstance(value['off'], type(None)):
-                    value['off'] = "NaN"
-                value['off'] = [float(value['off'])]
-
-            if not pd.isna(value['on']).any() and not pd.isna(value['off']).any() and len(value['on'])>len(value['off']):
-                value['off'] += [80]
-            
-            try:
-                if not pd.isna(value['on']).any() and pd.isna(value['off']).any():
-                    value['off'] = [80]
-            except:
-                print(value)
-            if isinstance(value['on'], str):
-                value['on'] = ast.literal_eval(value['on'])
-            if isinstance(value['off'], str):
-                value['off'] = ast.literal_eval(value['off'])
-
-            try:
-                if len(value['on'])<len(value['off']): value['off']+=[80]
-            except TypeError:
-                print(value)
-            subs = sorted(value['on'] + value['off'])
-            if len(subs)%2: subs.append(80)
-            for i in range(int(len(subs)/2)):
-                    time.append([subs[i], subs[i+1]])
-                    total_time += (subs[i+1] - subs[i])
+            time_range, total_time = self._time_ranges(value)
             if pd.isna(total_time): total_time = 0
             self.lineup.at[key, 'game time'] = total_time
+            self.time_ranges[value['name']] = time_range
 
+    @classmethod
+    def _time_ranges(cls, value):
+        """
+        Determine the time ranges for a given player.
+        """
+
+        time = []
+        total_time = 0
+
+        if isinstance(value['on'], (str)):
+            value['on'] = ast.literal_eval(value['on'])
+
+        if isinstance(value['off'], (str)):
+            value['off'] = ast.literal_eval(value['off'])
+
+        if isinstance(value['on'], (type(None), int, float)):
+            if isinstance(value['on'], type(None)):
+                value['on'] = "NaN"
+                value['on'] = [float(value['on'])]
+            else:
+                value['on'] = [float(value['on'])]
+
+        if isinstance(value['off'], (type(None), int, float)):
+            if isinstance(value['off'], type(None)):
+                value['off'] = "NaN"
+                value['off'] = [float(value['off'])]
+            else:
+                value['off'] = [float(value['off'])]
+
+        if not pd.isna(value['on']).any() and not pd.isna(value['off']).any() and len(value['on'])>len(value['off']):
+            value['off'] += [80]
+
+        try:
+            if not pd.isna(value['on']).any() and pd.isna(value['off']).any():
+                value['off'] = [80]
+        except:
+            print(value)
+
+        try:
+            if len(value['on'])<len(value['off']): value['off']+=[80]
+        except TypeError:
+            print(value)
+        subs = sorted(value['on'] + value['off'])
+        if len(subs)%2: subs.append(80)
+        return total_time_from_ranges(subs)
+            
     def players(self):
-        players = [Player(name) for name in self.lineup.name.values]
+        players = [Player(**dict(player)) for i, player in self.lineup.iterrows()]
         return players
 
     def to_dict(self):

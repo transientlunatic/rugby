@@ -55,8 +55,8 @@ class Team():
         
     def squad(self, tournament):
         positions = []
-        positions += [x.away.lineup for x in self.matches(tournament, filts="away")]
-        positions += [x.home.lineup for x in self.matches(tournament, filts="home")]
+        positions += [x.lineups['away'].lineup for x in self.matches(tournament, filts="away")]
+        positions += [x.lineups['home'].lineup for x in self.matches(tournament, filts="home")]
         positions = chain(*positions)
         players = set([y.player for y in positions])
         return list(players)

@@ -233,7 +233,7 @@ def league_heatmap(results, league, season):
     fig.tight_layout()
     return fig
 
-def tournament_heatmap(tournament):
+def tournament_heatmap(tournament, ax=None, **kwargs):
     results = tournament.results_table()
     pivot = results.pivot_table(index="home", columns="away", values="difference", aggfunc="sum")#.fillna(0)
     home = results.pivot_table(index="home", columns="away", values="home_score", aggfunc="first").values
@@ -266,14 +266,17 @@ def tournament_heatmap(tournament):
             scorelines.append(f"{h:.0f}·{a:.0f}")
 
 
-    
-    fig, ax = plt.subplots()
+    if not ax:
+        fig, ax = plt.subplots()
 
+    kw = {"fontdict": {"fontsize":4}}
+    kw.update(kwargs)
+        
     im = heatmap(pivot.values, 
                        pivot.index, [f"{name[:5].strip()}." for name in pivot.index], ax=ax,
                        cmap="RdBu", cbarlabel="Points Difference", alpha=0.7)
 
-    texts = annotate_heatmap(im, data = np.array(scorelines).reshape(home.shape), fontdict={"fontsize":4})
+    texts = annotate_heatmap(im, data = np.array(scorelines).reshape(home.shape), fontdict=kw['fontdict'])
 
     ax.grid(False)
 
@@ -292,9 +295,9 @@ def tournament_heatmap(tournament):
 
 
     ax.set_title(f"{tournament.name}\n{tournament.season}", fontdict={"fontsize":10})
-    fig.tight_layout()
+    #fig.tight_layout()
     #fig.savefig("west3-2019.png")
-    return fig
+    return ax
 
 
 def player_score_matrix_plot(tournament, team, ax=None, squad=False, **kw):

@@ -14,6 +14,14 @@ class Scores(object):
         except:
             self.total = 0
 
+    def in_times(self, time_range):
+        on_field = []
+        for i, score in self.scores.iterrows():
+            for trange in time_range:
+                on_field.append(trange[0] <= score.minute <= trange[1])
+        return self.scores[on_field]
+    
+            
     def count(self, score_type="try"):
         """Count the number of a given type of scoring event."""
         df = self.scores

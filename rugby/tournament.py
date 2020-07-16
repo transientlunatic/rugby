@@ -21,8 +21,7 @@ class Tournament():
         self.name = name
         
 
-        if teams:
-            
+        if teams: 
             self.teams_flat = list(chain(*teams.values()))
             self.team_list = [Team.from_dict(team) for team in self.teams_flat]
             cons = {}
@@ -35,6 +34,8 @@ class Tournament():
 
         self.matches = [Match(x, tournament=self) for i, x in matches.iterrows()]
         self.future =  [match for match in self.matches if match.scores==None]
+        for match in self.future:
+            self.matches.remove(match)
         
     @classmethod
     def from_json(cls, file):
@@ -111,6 +112,29 @@ class Tournament():
                         rows.append([int(match.round), match.date, match.scores['home'].total, match.scores['away'].total, match.teams['home'], match.teams['away'], match.teams[state],\
                              player.name, i, player.on, player.off, player.yellows, player.reds, player.tries, player.conversion, player.kick, player.penalty])
         pd.DataFrame(rows, columns = ["round", "date", "home_score", "away_score", "home", "away", "team", "player", "position", "on", "off", "yellow", "red", "try", "conversion", "kick", "penalty"]).to_csv(file)
+
+
+    def _add_match(self, match):
+        """
+        Insert a new match to this tournament.
+        """
+        home = match.teams['home']
+        away = match.teams['away']
+        date = match.date
+
+        match.tournament = self.name
+        match.season = self.season
+        
+        # Check if this match already exists in the tournament
+        matches = [matchi for matchi in self.matches if ((matchi.teams['home']==home) & (matchi.teams['away']==away) & (matchi.date==date))]
+        for matchi in matches:
+            self.matches.remove(matchi)
+        matches = [matchi for matchi in self.future if ((matchi.teams['home']==home) & (matchi.teams['away']==away) & (matchi.date==date))]
+        for matchi in matches:
+            self.future.remove(matchi)
+        self.matches.append(match)
+        return self
+        
         
     def teams(self):
         """
@@ -133,9 +157,9 @@ class Tournament():
 
     def fixtures_table(self, future=False):
         if not future:
-            data = [[pd.to_datetime(match.date), match.teams['home'], match.teams['away']] for match in self.matches]
+            data = [[pd.to_datetime(match.date), match.teams['home'].short_name, match.teams['away'].short_name] for match in self.matches]
         else:
-            data = [[pd.to_datetime(match.date), match.teams['home'], match.teams['away']] for match in self.future]
+            data = [[pd.to_datetime(match.date), match.teams['home'].short_name, match.teams['away'].short_name] for match in self.future]
         return pd.DataFrame(data, columns=["date", "home", "away"])
     
     def results_table(self):
@@ -225,8 +249,8 @@ class Tournament():
                 data = pd.merge( lineups, data, how='outer',  right_on="player", left_on="name")
             else:
                 data = data.rename(columns={"player": "name"})
-            teams = pd.DataFrame(np.array([[match.teams['home']] * len(match.scores['home'].scores) + [match.teams['away']] * len(match.scores['away'].scores)]).T, columns=["team"])
-            home = pd.DataFrame(np.array([[match.teams['home']] * len(data), [match.teams['away']] * len(data)]).T, columns=["home", "away"])
+            teams = pd.DataFrame(np.array([[match.teams['home'].short_name] * len(match.scores['home'].scores) + [match.teams['away'].short_name] * len(match.scores['away'].scores)]).T, columns=["team"])
+            home = pd.DataFrame(np.array([[match.teams['home'].short_name] * len(data), [match.teams['away'].short_name] * len(data)]).T, columns=["home", "away"])
             home = home.join(teams)
             if squad:
                 data = data.join(home).reset_index().drop(columns=["player", "index_x", "index_y", "index"])
