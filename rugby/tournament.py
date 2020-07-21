@@ -6,6 +6,7 @@ import numpy as np
 
 import json
 
+from . import models
 from .match import Match, Lineup
 from .team import Team
 from . import utils
@@ -20,7 +21,7 @@ class Tournament():
         self.season=season
         self.name = name
         
-
+        self.team_conferences = {}
         if teams: 
             self.teams_flat = list(chain(*teams.values()))
             self.team_list = [Team.from_dict(team) for team in self.teams_flat]
@@ -31,9 +32,14 @@ class Tournament():
                     cons[team['short name']] = conference
             self.teams_dict = {team.short_name:team for team in self.team_list}
             self.team_conferences = cons
-
-        self.matches = [Match(x, tournament=self) for i, x in matches.iterrows()]
-        self.future =  [match for match in self.matches if match.scores==None]
+            
+        if isinstance(matches, pd.DataFrame):
+            self.matches = [Match(x, tournament=self) for i, x in matches.iterrows()]
+        else:
+            self.matches = [Match(x, tournament=self) for x in matches]
+            
+        self.future = [match for match in self.matches if (match.score==None) or (pd.isna(match.score['home']))]
+        
         for match in self.future:
             self.matches.remove(match)
         
@@ -67,6 +73,21 @@ class Tournament():
 
         return cls(name, season, matches)
 
+    def to_database(self):
+        """
+        Save this tournament to the database.
+        """
+        for team in self.teams():
+            models.Team.add(team)
+
+        season = models.Season.add(self)
+
+        for match in self.matches:
+            models.Match.add(match)
+
+        for match in self.future:
+            models.Match.add(match)
+    
     def to_json(self, filename=None):
         """Serialise this tournament as a json."""
         data = {}
@@ -134,14 +155,17 @@ class Tournament():
             self.future.remove(matchi)
         self.matches.append(match)
         return self
-        
-        
+            
     def teams(self):
         """
         Return a set of all of the teams which had matches in this tournament.
         """
         if not hasattr(self, "team_list"):
-            return list(set(chain.from_iterable((x.teams['home'], x.teams['away']) for x in self.matches)))
+            teams =  list(set(chain.from_iterable((x.teams['home'], x.teams['away']) for x in self.matches)))
+            if isinstance(teams[0], Team):
+                return teams
+            else:
+                return [Team(team, {"primary": "#000000"}, team, None) for team in teams]
         else:
             return self.team_list
 
@@ -164,10 +188,15 @@ class Tournament():
     
     def results_table(self):
         scores = [[match.teams['home'].short_name, match.teams['away'].short_name, match.score['home'], match.score['away'],
-                   match.scores['home'].total-match.scores['away'].total,
+                   match.score['home']-match.score['away'],
                    match.scores['home'].count("try"),
                    match.scores['away'].count("try")]
                   for match in self.matches if not match.scores==None]
+        scores += [[str(match.teams['home']), str(match.teams['away']), match.score['home'], match.score['away'],
+                   match.score['home']-match.score['away'],
+                    None,
+                    None]
+                  for match in self.matches if  match.scores==None]
         return pd.DataFrame(scores, columns=["home", "away", "home_score", "away_score", "difference", "home tries", "away tries"])
 
     def league_table(self):
@@ -198,7 +227,7 @@ class Tournament():
         points = []
         for team in self.teams():
             points.append({"team": team,
-                           "conference": self.team_conferences[team.short_name],
+                           "conference": self.team_conferences.get(team.short_name, "A"),
                            "played": df[df.home==team.short_name].count()['Home P'] + df[df.away==team.short_name].count()['Away P'],
                            "won": df[df.home==team.short_name].sum()['Home W'] + df[df.away==team.short_name].sum()['Away W'],
                            "drawn": df[df.home==team.short_name].sum()['Home D'] + df[df.away==team.short_name].sum()['Away D'],
@@ -292,4 +321,18 @@ class Tournament():
         players = set([y.name for i,y in positions.iterrows()])
         return list(players)
 
-
+    def player_covariance(self, team1, team2):
+        """
+        Get the "covariance matrix" for players in this tournament.
+        """
+        players1 = team1.squad(self)
+        players2 = team2.squad(self)
+        matrix_for = np.zeros((len(players1), len(players2)))
+        matrix_against = np.zeros((len(players1), len(players2)))
+        for match in self.matches:
+            if {team1, team2} <= set(match.teams.values()):
+                for i, player1 in enumerate(players1):
+                    for j, player2 in enumerate(players2):
+                        matrix_for[i,j] += player1.onfield_point_mutual_rate(player2, match)[0]
+                        matrix_against[i,j] += player1.onfield_point_mutual_rate(player2, match)[1]
+        return matrix_for, matrix_against, players1, players2

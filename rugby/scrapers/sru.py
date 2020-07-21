@@ -4,6 +4,9 @@ from bs4 import BeautifulSoup
 import dateparser
 import yaml
 import json
+import pandas as pd
+
+from .data import Match, Tournament
 
 class SRUResults():
     """
@@ -54,7 +57,15 @@ class SRUResults():
             match_data['status'] = match.find("span", {"class": "matches__status"}).text
             match_data['date'] = dateparser.parse(match.find_previous("div", {"class": "club-match-dates"}).text.strip())
 
-            matches_list.append(match_data)
+            data = {"home": {"team": match_data["home"]}, 
+                    "away": {"team": match_data["away"]},
+                    "stadium": None,
+                    "status": match_data["status"],
+                    "date": match_data["date"]
+            }
+            
+            matches_list.append(data)
+        
         return matches_list
     
     def results_list(self):
@@ -80,25 +91,19 @@ class SRUResults():
             match_data['home_score'], match_data['away_score'] = match.find("span", {"class": "matches__status"}).text.split(" - ")
             match_data['date'] = dateparser.parse(match.find_previous("div", {"class": "club-match-dates"}).text.strip())
 
-            matches_list.append(match_data)
+            data = {"home": {"score": match_data["home_score"], "team": match_data["home"]}, 
+                    "away": {"score": match_data["away_score"], "team": match_data["away"]},
+                    "stadium": None,
+                    "date": match_data["date"]
+            }
+            
+            matches_list.append(data)
         return matches_list
     
-    def to_json(self):
+    def to_json(self, filename=None):
         """
         Produce a json string of fixtures and results.
         """
-        output = []
-        output += self.fixtures_list()
-        output += self.results_list()
+        output = Tournament(self.league, self.season, self.fixtures_list()+self.results_list())
         
-        return json.dumps(output, default=str, indent=3)
-    
-    def to_yaml(self):
-        """
-        Produce a yaml string of fixtures and results.
-        """
-        output = []
-        output += self.fixtures_list()
-        output += self.results_list()
-        
-        return yaml.dump(output, indent=3, default_flow_style=False)
+        return output.to_json(filename)

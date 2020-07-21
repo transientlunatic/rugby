@@ -39,7 +39,7 @@ setup(
     install_requires=requirements,
     entry_points='''
         [console_scripts]
-        rugby=rugby.scripts.cli:rugby
+        rugby=rugby.scripts.cli:rugbycli
         rugbyapi=rugby.scripts.api:app
     ''',
     license="ISCL",

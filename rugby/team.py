@@ -1,3 +1,8 @@
+from itertools import chain
+import pandas as pd
+
+from .player import Player
+
 class Team(): 
     
     def __init__(self, name, colors, short_name, country):
@@ -23,7 +28,7 @@ class Team():
         return "{}".format(self.name)
 
     def __str__(self):
-        return self.name
+        return self.short_name
     
     def _repr_html_(self):
         output = f"<h2>{self.name}"
@@ -40,23 +45,26 @@ class Team():
         return svg
     
     def __eq__(self, other):
-        return self.name == other.name
+        if isinstance(other, str):
+            return self.name == other
+        else:
+            return self.name == other.name
     
     def __hash__(self):
         return self.name.__hash__()
     
     def matches(self, tournament, filts=None):
         if filts=="home":
-            return [x for x in tournament.matches if (x.home.team == self)]
+            return [x for x in tournament.matches if (x.teams['home'] == self)]
         elif filts=="away":
-            return [x for x in tournament.matches if (x.away.team == self)]
+            return [x for x in tournament.matches if (x.teams['away'] == self)]
         else:
-            return [x for x in tournament.matches if (x.home.team == self) or (x.away.team == self)]
+            return [x for x in tournament.matches if (x.teams['home'] == self) or (x.teams['away'] == self)]
         
     def squad(self, tournament):
         positions = []
         positions += [x.lineups['away'].lineup for x in self.matches(tournament, filts="away")]
         positions += [x.lineups['home'].lineup for x in self.matches(tournament, filts="home")]
-        positions = chain(*positions)
-        players = set([y.player for y in positions])
-        return list(players)
+        positions = pd.concat(positions)
+        players = [Player(player['name']) for i, player in positions['name'].reset_index().drop_duplicates().iterrows()]
+        return players

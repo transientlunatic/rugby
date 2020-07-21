@@ -34,7 +34,7 @@ style = {
     "figure.facecolor": "#FFFFFFFF"
 }
 
-def heatmap(data, row_labels, col_labels, ax=None,
+def heatmap(data, row_labels, col_labels, ax=None, diagonal=False,
             cbar_kw={}, cbarlabel="", **kwargs):
     """
     Create a heatmap from a numpy array and two lists of labels.
@@ -94,10 +94,10 @@ def heatmap(data, row_labels, col_labels, ax=None,
     ax.set_yticks(np.arange(data.shape[0]+1)-.5, minor=True)
     ax.grid(which="minor", color="w", linestyle='-', linewidth=3.5, alpha=1)
     ax.tick_params(which="minor", bottom=False, left=False)
-
-    for i, label in enumerate(row_labels):
-        rect = matplotlib.patches.Rectangle((i-0.5,i-0.5),1,1,linewidth=1,edgecolor=None,facecolor='white')
-        ax.add_patch(rect)
+    if not diagonal:
+        for i, label in enumerate(row_labels):
+            rect = matplotlib.patches.Rectangle((i-0.5,i-0.5),1,1,linewidth=1,edgecolor=None,facecolor='white')
+            ax.add_patch(rect)
 
     
     return im
@@ -105,7 +105,7 @@ def heatmap(data, row_labels, col_labels, ax=None,
 
 def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
                      textcolors=("black", "white"),
-                     threshold=None, **textkw):
+                     threshold=None, diagonal=False, **textkw):
     """
     A function to annotate a heatmap.
 
@@ -163,7 +163,7 @@ def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
     
     for i in range(data.shape[0]):
         for j in range(data.shape[1]):
-            if i == j: continue
+            if (i == j) and not diagonal: continue
             
             if "fontdict" in kw:
                 kw['fontdict']["color"] = text_color(cell_data[i,j])

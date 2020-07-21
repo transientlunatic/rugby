@@ -19,8 +19,14 @@ class Match(object):
         """
         A row from the JSON data file.
         """
-        self.score = {"home": row['home']['score'],
-                      "away": row['away']['score']}
+
+
+        if row['home']['score'] in ["C", "P"]:
+            self.score = {"home": float("nan"), "away": float("nan")}
+
+        else:
+            self.score = {"home": float(row['home']['score']),
+                          "away": float(row['away']['score'])}
 
         if isinstance(row['home']['team'], dict):
             self.teams = {'home': Team.from_dict(row['home']['team']),
@@ -34,11 +40,12 @@ class Match(object):
                           'away': row['away']['team']
             }
         try:
-            self.date =  row.date.to_datetime()
+            self.date =  row["date"].to_datetime()
         except AttributeError:
-            self.date = pd.to_datetime(row.date)
-            
-        self.stadium = row.stadium
+            self.date = pd.to_datetime(row["date"])
+
+        if "stadium" in row:
+            self.stadium = row["stadium"]
         if hasattr(row, "tround"):
             self.round = row['tround']
 
@@ -95,7 +102,10 @@ class Match(object):
         data['season'] = self.season
         for state in ["home", "away"]:
             data[state] = {}
-            data[state]['team'] = self.teams[state].to_dict()
+            if isinstance(self.teams[state], Team):
+                data[state]['team'] = self.teams[state].to_dict()
+            else:
+                data[state]['team'] = self.teams[state]
             data[state]['score'] = self.score[state]
             if hasattr(self, "lineups"):
                 data[state]['lineup'] = self.lineups[state].to_dict()
@@ -142,6 +152,19 @@ class Match(object):
         data = pd.DataFrame.from_dict([data]).iloc[0]
         return cls(data)
 
+    # @classmethod
+    # def from_dict(cls, data):
+    # """
+    # Create a match from a dictionary.
+
+    # Parameters
+    # ----------
+    # data : dict
+    #    The dictionary containing the match data.
+    # """
+    
+    
+    
     def players(self):
         """
         Get a list of all of the players named in the lineups.
@@ -151,26 +174,19 @@ class Match(object):
         players += self.lineups['away'].players()
         return players
 
-    def player_covariance(self, players):
+    def player_covariance(self):
         """
         Get the "covariance matrix" for players in this match.
         """
-        matrix = np.zeros((len(players), len(players)))
-        for i, player1 in enumerate(players):
-            for j, player2 in enumerate(players):
-                if i==j: 
-                    matrix[i,j] = np.nan
-                if i<j:
-                    matrix[i,j] = player1.onfield_point_mutual_rate(player2, self)[0]
-                if i>j:
-                    matrix[i,j] = - player1.onfield_point_mutual_rate(player2, self)[1]
-        return matrix
+        matrix_for = np.zeros((len(self.lineups['home'].players()), len(self.lineups['away'].players())))
+        matrix_against = np.zeros((len(self.lineups['home'].players()), len(self.lineups['away'].players())))
+        for i, player1 in enumerate(self.lineups['home'].players()):
+            for j, player2 in enumerate(self.lineups['away'].players()):
+                matrix_for[i,j], matrix_against[i,j] = player1.onfield_point_mutual_rate(player2, self)
+        return matrix_for, matrix_against
             
     def __repr__(self):
-        if self.scores:
-            layout = f"""{self.date:%Y-%m-%d %H:%M} {self.teams['home']} {self.scores['home'].total:>3} v {self.scores['away'].total:<3} {self.teams['away']}"""
-        else:
-            layout = f"""{self.date:%Y-%m-%d %H:%M} {self.teams['home']} v {self.teams['away']}"""
+        layout = f"""{self.date:%Y-%m-%d %H:%M} {self.teams['home']} {self.score['home']:>3} v {self.score['away']:<3} {self.teams['away']}"""
             
         return layout
 
@@ -259,7 +275,23 @@ class Lineup(object):
         subs = sorted(value['on'] + value['off'])
         if len(subs)%2: subs.append(80)
         return total_time_from_ranges(subs)
-            
+
+    def player_covariance(self):
+        """
+        Get the "covariance matrix" for players in this lineup.
+        """
+        players = self.players()
+        matrix = np.zeros((len(players), len(players)))
+        for i, player1 in enumerate(players):
+            for j, player2 in enumerate(players):
+                if i==j: 
+                    matrix[i,j] = np.nan
+                if i<j:
+                    matrix[i,j] = player1.onfield_point_mutual_rate(player2, self)[0]
+                if i>j:
+                    matrix[i,j] = - player1.onfield_point_mutual_rate(player2, self)[1]
+        return matrix
+    
     def players(self):
         players = [Player(**dict(player)) for i, player in self.lineup.iterrows()]
         return players
