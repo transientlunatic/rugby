@@ -4,11 +4,14 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import create_engine
 from sqlalchemy.orm.exc import NoResultFound
 
+from sqlalchemy import or_
+
 from datetime import datetime, timedelta
 
 Base = declarative_base()
 
 import rugby
+from flask import url_for
 
 engine = create_engine(f'sqlite:///{rugby.__path__[0]}/rugby.db')
 
@@ -88,6 +91,10 @@ class Team(Base):
     shortname = Column(String(250), nullable=False)
 
     @classmethod
+    def all(self):
+        return session.query(Team).all()
+    
+    @classmethod
     def from_query(self, shortname, session=session):
         return session.query(Team).filter_by(shortname=shortname).one()
     
@@ -123,13 +130,27 @@ class Match(Base):
     away_score = Column(Integer)
 
     @classmethod
-    def from_query(self, home, away, date, session=session):
-        date = datetime.strptime(date, "%Y-%m-%d")
+    def all(self):
+        return [rugby.data.Match(match.to_dict()).to_rest()
+                for match in session.query(Match).all()]
+    
+    @classmethod
+    def from_query(self, home, away, date=None, session=session):
+        
         home = Team.from_query(home).id
         away = Team.from_query(away).id
-        print(date) # home=home, away=away, date=
-        match = session.query(Match).filter(Match.date.between(date, date+timedelta(days=1))).filter_by(home=home, away=away).one()
-        return rugby.data.Match(match.to_dict())
+
+        if date:
+            date = datetime.strptime(date, "%Y-%m-%d")
+        
+            match = session.query(Match).filter(Match.date.between(date, date+timedelta(days=1))).filter_by(home=home, away=away).one()
+            return rugby.data.Match(match.to_dict())
+
+        else:
+            matches = session.query(Match).filter(
+                (Match.home.in_([home, away]) & (Match.away.in_([home, away]))))
+            return [rugby.data.Match(match.to_dict()).to_rest() for match in matches]
+
 
     
     @classmethod
@@ -164,3 +185,5 @@ class Match(Base):
                     stadium=None,
                     home=dict(score=self.home_score, team=home), 
                     away=dict(score=self.away_score, team=away))
+
+

@@ -8,6 +8,8 @@ import json, yaml
 import pandas as pd
 import numpy as np
 
+from flask import url_for
+
 from .player import Player
 from .scores import Scores
 from .utils import json_serial, total_time_from_ranges
@@ -53,6 +55,9 @@ class Match(object):
         if not isinstance(tournament, type(None)):
             self.season = tournament.season
             self.tournament = tournament.name
+        else:
+            self.season = None
+            self.tournament = None
             
         # Handle the lineups
         if "lineup" in row['home']:
@@ -132,6 +137,22 @@ class Match(object):
         else:
             return yaml.safe_dump(self.to_dict())
 
+    def to_rest(self):
+        home = self.teams['home'].short_name
+        away = self.teams['away'].short_name
+        
+        return dict(date=self.date, 
+                    season=self.season,
+                    url=url_for("match", home=home, away=away,
+                                date=f"{self.date:%Y-%m-%d}",
+                                _external=True),
+                    stadium=None,
+                    score = self.score,
+                    home={"name": home,
+                          "url": url_for("team", shortname=home, _external=True)}, 
+                    away={"name": away,
+                          "url": url_for("team", shortname=away,  _external=True)})
+        
     @classmethod
     def from_json(cls, file):
         """
@@ -300,6 +321,7 @@ class Lineup(object):
     def to_dict(self):
         """Represent this lineup as a dict."""
         return self.lineup[['name', 'on', 'off', 'reds', 'yellows']].T.to_dict()
+    
     
     def __repr__(self):
         out = []
