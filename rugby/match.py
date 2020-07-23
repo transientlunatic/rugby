@@ -98,8 +98,9 @@ class Match(object):
         data = {}
         data['date'] = self.date.isoformat()
         data['stadium'] = self.stadium
-        data['tournament'] = self.tournament
-        data['season'] = self.season
+        if hasattr(self, "tournament"):
+            data['tournament'] = self.tournament
+            data['season'] = self.season
         for state in ["home", "away"]:
             data[state] = {}
             if isinstance(self.teams[state], Team):

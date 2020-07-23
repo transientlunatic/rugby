@@ -77,10 +77,10 @@ class Tournament():
         """
         Save this tournament to the database.
         """
+        season = models.Season.add(self)
+        
         for team in self.teams():
             models.Team.add(team)
-
-        season = models.Season.add(self)
 
         for match in self.matches:
             models.Match.add(match)

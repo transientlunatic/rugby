@@ -4,6 +4,8 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import create_engine
 from sqlalchemy.orm.exc import NoResultFound
 
+from datetime import datetime, timedelta
+
 Base = declarative_base()
 
 import rugby
@@ -12,9 +14,11 @@ engine = create_engine(f'sqlite:///{rugby.__path__[0]}/rugby.db')
 
 Base.metadata.create_all(engine)
 
-from sqlalchemy.orm import sessionmaker
-DBSession = sessionmaker(bind=engine)
-session = DBSession()
+# from sqlalchemy.orm import sessionmaker
+# DBSession = sessionmaker(bind=engine)
+# session = DBSession()
+
+from flask_sqlalchemy_session import current_session as session
 
 import rugby.data
 
@@ -94,7 +98,7 @@ class Team(Base):
         Return its ID.
         """
         try:
-            team = Team.from_query(team)
+            team = Team.from_query(team.short_name)
         except NoResultFound:
             team = Team(name=team.name, shortname=team.short_name)
             session.add(team)
@@ -118,6 +122,16 @@ class Match(Base):
     home_score = Column(Integer)
     away_score = Column(Integer)
 
+    @classmethod
+    def from_query(self, home, away, date, session=session):
+        date = datetime.strptime(date, "%Y-%m-%d")
+        home = Team.from_query(home).id
+        away = Team.from_query(away).id
+        print(date) # home=home, away=away, date=
+        match = session.query(Match).filter(Match.date.between(date, date+timedelta(days=1))).filter_by(home=home, away=away).one()
+        return rugby.data.Match(match.to_dict())
+
+    
     @classmethod
     def add(self, match):
         """
