@@ -13,7 +13,13 @@ Base = declarative_base()
 import rugby
 from flask import url_for
 
-engine = create_engine(f'sqlite:///{rugby.__path__[0]}/rugby.db')
+import os
+if 'RUGBYDB' in os.environ:
+    db = os.environ['RUGBYDB']
+else:
+    db = f"{rugby.__path__[0]}/rugby.db"
+
+engine = create_engine("sqlite:///"+db)
 
 Base.metadata.create_all(engine)
 
@@ -30,7 +36,9 @@ class Tournament(Base):
     __tablename__ = 'tournament'
     id = Column(Integer, primary_key=True)
     name = Column(String(250), nullable=False)
-
+    @classmethod
+    def all(cls, session=session):
+        return session.query(cls).all()
     @classmethod
     def get(cls, id):
         try:
@@ -70,14 +78,23 @@ class Season(Base):
         return season
     
     @classmethod
-    def from_query(self, tournament, season, session=session):
+    def from_query(self, tournament, season=None, session=session):
         tournament = session.query(Tournament).filter_by(name=tournament).one()
-        season = session.query(Season).filter_by(name=season, tournament=tournament.id).one()
+
+        if season:
+            season = session.query(Season).filter_by(name=season, tournament=tournament.id).one()
         
-        return rugby.data.Tournament(
+            return rugby.data.Tournament(
                 name=tournament.name,
                 season=season.name, 
                 matches=season.matches(session))
+        else:
+            seasons = session.query(Season).filter_by(tournament=tournament.id).all()
+            return [rugby.data.Tournament(
+                name=tournament.name,
+                season=season.name, 
+                matches=season.matches(session)) for season in seasons]
+        
     
     def matches(self, session=session):
         matches = session.query(Match).filter_by(season=self.id).all()
@@ -89,6 +106,10 @@ class Team(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(250), nullable=False)
     shortname = Column(String(250), nullable=False)
+    color_primary = Column(String(6), nullable=False)
+    color_secondary = Column(String(6), nullable=False)
+    color_extra = Column(String(6), nullable=False)
+    country = Column(String(250), nullable=False)
 
     @classmethod
     def all(self):
@@ -115,8 +136,10 @@ class Team(Base):
     def to_dict(self):
         return dict(name=self.name, 
                     short_name=self.shortname,
-                    colors={"primary": "#000000"},
-                    country="None"                    
+                    colors={"primary": self.color_primary,
+                            "secondary": self.color_secondary,
+                            "extra": self.color_extra},
+                    country=self.country                    
                    )
     
 class Match(Base):
@@ -180,10 +203,16 @@ class Match(Base):
     def to_dict(self, session=session):
         home = rugby.data.Team(**session.query(Team).filter_by(id=self.home).one().to_dict())
         away = rugby.data.Team(**session.query(Team).filter_by(id=self.away).one().to_dict())
+        if self.home_score:
+            home=dict(score=self.home_score, team=home)
+            away=dict(score=self.away_score, team=away)
+        else:
+            home=dict(team=home, score=float('nan'))
+            away=dict(team=away, score=float('nan'))
         return dict(date=self.date, 
                     season=self.season,
                     stadium=None,
-                    home=dict(score=self.home_score, team=home), 
-                    away=dict(score=self.away_score, team=away))
+                    home=home, 
+                    away=away)
 
 
