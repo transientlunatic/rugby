@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 
 from sqlalchemy import create_engine
@@ -19,6 +19,8 @@ if 'RUGBYDB' in os.environ:
 else:
     db = f"{rugby.__path__[0]}/rugby.db"
 
+import bcrypt
+
 engine = create_engine("sqlite:///"+db)
 
 Base.metadata.create_all(engine)
@@ -31,6 +33,44 @@ from flask_sqlalchemy_session import current_session as session
 
 import rugby.data
 
+class User(Base):
+    __tablename__ = 'user'
+    id = Column(Integer, primary_key=True)
+    name = Column(String(250), nullable=False)
+    username = Column(String(250), nullable=False)
+    password = Column(String(250), nullable=False)
+    registered_on = Column(DateTime, nullable=False)
+    admin = Column(Boolean, nullable=False, default=False)
+
+    @classmethod
+    def find_user(cls, username, session=session):
+        """Find a user from a username."""
+        return session.query(cls).filter_by(username=username).one()
+
+    @classmethod
+    def create_user(cls, name, username, password, session=session):
+        """Create a new user in the database."""
+        try:
+            user = cls.find_user(username, session)
+        except NoResultFound:
+            salt = bcrypt.gensalt()
+            user = cls(name=name,
+                       username=username,
+                       password=bcrypt.hashpw(password.encode(), salt),
+                       registered_on=datetime.now())
+            session.add(user)
+            session.commit()
+        return user
+
+    @classmethod
+    def login(cls, username, password):
+        """Log the user in."""
+        db_user = cls.find_user(username)
+        salt = bcrypt.gensalt()
+        if bcrypt.checkpw(password.encode(), db_user.password):
+            return {"id": db_user.username}
+        else:
+            return False
 
 class Tournament(Base):
     __tablename__ = 'tournament'

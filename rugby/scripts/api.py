@@ -1,26 +1,45 @@
+import os
 import json
 import glob
 import re
 
 import rugby.models
 
-from flask import url_for
-from flask_api import FlaskAPI
+from flask import url_for, request
+from flask_api import FlaskAPI, status
 from flask_compress import Compress
 from flask_cors import CORS
+
+from flask_jwt_extended import (
+    JWTManager, jwt_required, 
+    create_access_token,
+    create_refresh_token
+)
 
 app = FlaskAPI(__name__)
 Compress(app)
 CORS(app)
+if 'RUGBYDB' in os.environ:
+    db = os.environ['RUGBYDB']
+    app.config['JWT_SECRET_KEY'] = os.environ['RUGBY_SECRET']
+else:
+    db = f"{rugby.__path__[0]}/rugby.db"
+    app.config['JWT_SECRET_KEY'] = 'test'
+jwt = JWTManager(app)
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-engine = create_engine(f'sqlite:///{rugby.__path__[0]}/rugby.db')
+
+engine = create_engine(f'sqlite:///{db}')
 session_factory = sessionmaker(bind=engine)
 
 from flask_sqlalchemy_session import flask_scoped_session
 session = flask_scoped_session(session_factory, app)
+
+rugby.models.User.__table__.drop(engine)
+rugby.models.User.__table__.create(engine)
+rugby.models.User.create_user("Daniel Williams", "daniel", "daniel", session=session)
 
 @app.route("/")
 def resources():
@@ -30,6 +49,7 @@ def resources():
                 version = "0.0.1")
     
     resources = {
+        url_for("authenticate"): {"post": {"description": "Authenticates user, returns JWT."}},
         url_for("tournaments"): {"get": {"description": "Returns a list of all seasons for a tournament."}},
         url_for("seasons"): {"get": {"description": "Returns a list of all seasons in the database."}},
         url_for("all_players"): {"get": {"description": "Returns a list of all players."}},
@@ -38,6 +58,36 @@ def resources():
                  }
     return dict(info=info, paths=resources, externalDocs="https://code.daniel-williams.co.uk/rugby")
 
+    
+@app.route("/authenticate", methods=['POST'])
+def authenticate():
+    """
+    Authenticate the user and issue a JWT.
+    """
+    data = request.data
+    print(set(data.keys()) < {"username"})
+    if set(data.keys()) < {"username", "password"}:
+        return {}, status.HTTP_400_BAD_REQUEST
+
+    username = data.get("username")
+    password = data.get("password")
+    user = rugby.models.User.login(username, password)
+    if user:
+        access_token = create_access_token(identity=user['id'], fresh=True)
+        refresh_token = create_refresh_token(user['id'])
+        return {
+            'access_token': access_token,
+            'refresh_token': refresh_token
+        }
+    else:
+        return {}, status.HTTP_401_UNAUTHORIZED
+
+@app.route("/secret")
+@jwt_required
+def secret():
+    """A secret."""
+    return "Keep it secret. Keep it safe."
+    
 @app.route("/tournaments/")
 def tournaments():
     """

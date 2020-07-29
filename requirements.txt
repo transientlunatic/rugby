@@ -8,3 +8,8 @@ flask-API
 click
 flask-compress
 flask-cors
+flask
+flask-jwt-extended
+sqlalchemy
+flask_sqlalchemy_session
+bcrypt
