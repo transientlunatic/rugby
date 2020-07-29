@@ -98,7 +98,7 @@ class Season(Base):
     
     def matches(self, session=session):
         matches = session.query(Match).filter_by(season=self.id).all()
-        matches = [match.to_dict() for match in matches]
+        matches = [match.to_dict(session) for match in matches]
         return matches
 
 class Team(Base):
@@ -154,25 +154,28 @@ class Match(Base):
 
     @classmethod
     def all(self):
-        return [rugby.data.Match(match.to_dict()).to_rest()
+        return [rugby.data.Match(match.to_dict(session)).to_rest()
                 for match in session.query(Match).all()]
     
     @classmethod
     def from_query(self, home, away, date=None, session=session):
         
-        home = Team.from_query(home).id
-        away = Team.from_query(away).id
+        home = Team.from_query(home, session).id
+        away = Team.from_query(away, session).id
 
         if date:
             date = datetime.strptime(date, "%Y-%m-%d")
         
             match = session.query(Match).filter(Match.date.between(date, date+timedelta(days=1))).filter_by(home=home, away=away).one()
-            return rugby.data.Match(match.to_dict())
+            match_o = rugby.data.Match(match.to_dict(session))
+            match_o.id = match.id
+            return match_o
+            
 
         else:
             matches = session.query(Match).filter(
                 (Match.home.in_([home, away]) & (Match.away.in_([home, away]))))
-            return [rugby.data.Match(match.to_dict()).to_rest() for match in matches]
+            return [rugby.data.Match(match.to_dict(session)).to_rest() for match in matches]
 
 
     
@@ -216,3 +219,118 @@ class Match(Base):
                     away=away)
 
 
+class Player(Base):
+    __tablename__ = 'player'
+    id = Column(Integer, primary_key=True)
+    firstname = Column(String(250), nullable=False)
+    surname = Column(String(250), nullable=False)
+    country = Column(String(250), nullable=True)
+    @classmethod
+    def all(cls, session=session):
+        return session.query(cls).all()
+    @classmethod
+    def get(cls, id):
+        try:
+            return session.query(cls).filter_by(id=id).one()
+        except NoResultFound:
+            return None
+
+    @property
+    def name(self):
+        return f"{self.firstname} {self.surname}"
+        
+    @classmethod
+    def from_query(cls, firstname, surname, session=session):
+        return session.query(cls).filter_by(firstname=firstname, surname=surname).one()
+    
+    @classmethod
+    def add(self, firstname, surname, country=None,  session=session):
+        try:
+            player = session.query(Player).filter_by(firstname=firstname, surname=surname).one()
+        except NoResultFound:
+            player = Player(firstname=firstname, surname=surname, country=country)
+            session.add(player)
+            session.commit()
+        return player
+
+class Position(Base):
+    __tablename__ = 'position'
+    id = Column(Integer, primary_key=True)
+    match = Column(Integer, ForeignKey("match.id"))
+    team = Column(Integer, ForeignKey("team.id"))
+    player = Column(Integer, ForeignKey("player.id"), nullable=False)
+    number = Column(Integer)
+    on = Column(String(250))
+    off = Column(String(250))
+    reds = Column(String(250))
+    yellows = Column(String(250))
+
+    @classmethod
+    def from_query(cls, home, away, date, session=session):
+        home = Team.from_query(home.replace("_", " "), session).id
+        away = Team.from_query(away.replace("_", " "), session).id
+        date = datetime.strptime(date, "%Y-%m-%d")
+        
+        match = session.query(Match).filter(Match.date.between(date, date+timedelta(days=1))).filter_by(home=home, away=away).one()
+        positions = session.query(cls).filter_by(match=match.id).all()
+
+        out = []
+        for position in positions:
+            try:
+                on = position.on.split(",")
+                if on[0] != '':
+                    on = list(map(float, on))
+                else:
+                    on = None
+            except:
+                on = position.on
+
+            try:
+                off = position.off.split(",")
+                if off[0] != '':
+                    off = list(map(float, off))
+                elif on != None:
+                    off = [80]
+                else:
+                    off = None
+            except:
+                if on:
+                    off = [80]
+                else:
+                    off = position.off
+                
+            out.append({
+                "number": position.number,
+                "player": Player.get(position.player),
+                "on": on,
+                "off": off,
+                "team": position.team
+                })
+        
+        return out
+    
+    @classmethod
+    def all(cls, session=session):
+        return session.query(cls).all()
+    
+    @classmethod
+    def get(cls, id):
+        try:
+            return session.query(cls).filter_by(id=id).one()
+        except NoResultFound:
+            return None
+    
+    @classmethod
+    def add(cls, match, player, team, number, on, off, reds, yellows, session=session):
+        firstname = player.split()[0]
+        surname = " ".join(player.split()[1:])
+        player = Player.from_query(firstname=firstname, surname=surname, session=session)
+        team = Team.from_query(shortname=team, session=session)
+        try:
+            
+            position = session.query(cls).filter_by(match=match, team=team.id, player=player.id, number=number).one()
+        except NoResultFound:
+            position = cls(match=match, team=team.id, player=player.id, number=number, on=on, off=off, reds=reds, yellows=yellows)
+            session.add(position)
+            session.commit()
+        return position

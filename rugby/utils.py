@@ -85,6 +85,7 @@ def add_metadata(filename, **metadata):
     """
     Add metadata to a tournament JSON file.
     """
+    output = {}
     with open(filename, "r") as f:
         data = json.load(f)
     if not "matches" in data.keys():

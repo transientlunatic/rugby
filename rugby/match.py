@@ -145,13 +145,14 @@ class Match(object):
                     season=self.season,
                     url=url_for("match", home=home, away=away,
                                 date=f"{self.date:%Y-%m-%d}",
-                                _external=True),
+                                _external=False),
+                    lineups=url_for("lineup", home=home, away=away, date=f"{self.date:%Y-%m-%d}", _external=False), 
                     stadium=None,
                     score = self.score,
                     home={"name": home,
-                          "url": url_for("team", shortname=home, _external=True)}, 
+                          "url": url_for("team", shortname=home, _external=False)}, 
                     away={"name": away,
-                          "url": url_for("team", shortname=away,  _external=True)})
+                          "url": url_for("team", shortname=away,  _external=False)})
         
     @classmethod
     def from_json(cls, file):

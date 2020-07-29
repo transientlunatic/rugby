@@ -35,7 +35,9 @@ extensions = [
     'matplotlib.sphinxext.plot_directive',
     'IPython.sphinxext.ipython_directive',
     'IPython.sphinxext.ipython_console_highlighting',
-    'numpydoc'
+    'numpydoc',
+    'sphinxcontrib.autohttp.flask',
+    'sphinxcontrib.autohttp.flaskqref',
 ]
 
 # Add any paths that contain templates here, relative to this directory.

@@ -14,6 +14,7 @@ This is a python package designed to help analyse data from rugby matches.
 
    data
    plotting
+   rest
 
 
 

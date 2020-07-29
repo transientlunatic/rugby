@@ -32,6 +32,7 @@ def resources():
     resources = {
         url_for("tournaments"): {"get": {"description": "Returns a list of all seasons for a tournament."}},
         url_for("seasons"): {"get": {"description": "Returns a list of all seasons in the database."}},
+        url_for("all_players"): {"get": {"description": "Returns a list of all players."}},
         url_for("all_matches"): {"get": {"description": "Returns a list of all matches in the database."}},
         url_for("teams"): {"get": {"description": "Returns a list of all teams in the database."}}
                  }
@@ -39,6 +40,9 @@ def resources():
 
 @app.route("/tournaments/")
 def tournaments():
+    """
+    .. :quickref: Tournaments; Get a list of all tournaments in the database.
+    """
     out = []
     tournaments = rugby.models.Tournament.all()
     for tournament in tournaments:
@@ -130,11 +134,25 @@ def teams():
     
 @app.route("/teams/<shortname>")
 def team(shortname):
+    shortname = shortname.replace("_", " ")
     team = rugby.models.Team.from_query(shortname)
     return {"name": team.name,
             "country": team.country,
             "colors": {"primary": f"#{team.color_primary}"},
             "short name": team.shortname}
+
+@app.route("/players/")
+def all_players():
+    return [{"firstname": playerd.firstname,
+             "surname": playerd.surname,
+             "url": url_for("player", firstname=playerd.firstname, surname=playerd.surname.replace(" ", "_"))
+    } for playerd in rugby.models.Player.all()]
+
+@app.route("/player/<firstname>+<surname>")
+def player(firstname, surname):
+    surname = " ".join(surname.split("_"))
+    player = rugby.models.Player.from_query(firstname=firstname, surname=surname)
+    return {"firstname": player.firstname, "surname": player.surname, "country": player.country}
 
 @app.route("/matches/")
 def all_matches():
@@ -146,8 +164,84 @@ def derbies(home, away):
     
 @app.route("/matches/<home>/<away>/<date>")
 def match(home, away, date):
+    """
+    .. :quickref: Match; Get the details for a given match.
+    """
+    
     match = rugby.models.Match.from_query(home=home, away=away, date=date)
     return match.to_rest()
+
+@app.route("/matches/<home>/<away>/<date>/lineup")
+def lineup(home, away, date):
+    """
+    The lineups for a given match.
+
+    .. :quickref: Lineups; Get lineups for a given match.
+
+    **Example request** (http)
+
+    .. sourcecode:: http
+
+          GET /rugby/matches/Blues/Hurricanes/2020-06-14 HTTP/1.1
+          Host: https://data.daniel-williams.co.uk/
+          Accept: application/json
+
+    **Example request** (cUrl)
+
+    .. sourcecode:: bash
+
+          curl https://data.daniel-williams.co.uk/rugby/matches/Blues/Hurricanes/2020-06-14
+
+    **Example response**
+
+    .. sourcecode:: json
+
+
+        {
+            "date": "Sun, 14 Jun 2020 00:00:00 GMT",
+            "season": null,
+            "url": "/rugby/matches/Blues/Hurricanes/2020-06-14",
+            "lineups": "/rugby/matches/Blues/Hurricanes/2020-06-14/lineup",
+            "stadium": null,
+            "score": {
+                "home": 30.0,
+                "away": 20.0
+            },
+            "home": {
+                "name": "Blues",
+                "url": "/rugby/teams/Blues"
+            },
+            "away": {
+                "name": "Hurricanes",
+                "url": "/rugby/teams/Hurricanes"
+            }
+        }
+
+
+    :query home: Short-name of the home team.
+    :query away: Short-name of the away team.
+    :query date: The date of the match in ``YYYY-MM-DD`` format.
+
+    :returns: :class:`rugby.match.Match`
+
+    :resheader Content-Type: application/json
+    :status 200: lineups found
+    """
+    lineup = rugby.models.Position.from_query(home=home, away=away, date=date)
+    home = rugby.models.Team.from_query(home.replace("_", " "), session).id
+    away = rugby.models.Team.from_query(away.replace("_", " "), session).id
+    return {"home": {position['number']: {"player": position['player'].name,
+                                          "url": url_for("player", firstname=position['player'].firstname, surname=position['player'].surname.replace(" ", "_")),
+                                          "on": position['on'],
+                                          "off": position['off'],
+                                          }
+                                          for position in lineup if position['team'] == home},
+            "away": {position['number']: {"player": position['player'].name,
+                                          "url": url_for("player", firstname=position['player'].firstname, surname=position['player'].surname.replace(" ", "_")),
+                                          "on": position['on'],
+                                          "off": position['off'],
+                                          } for position in lineup if position['team'] == away}
+    } 
 
 if __name__ == '__main__':
     

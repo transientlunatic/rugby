@@ -318,7 +318,7 @@ class Tournament():
     
     def players(self):
         positions = self.positions()
-        players = set([y.name for i,y in positions.iterrows()])
+        players = set([y['name'] for i,y in positions.iterrows()])
         return list(players)
 
     def player_covariance(self, team1, team2):
