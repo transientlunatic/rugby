@@ -11,7 +11,9 @@ from flask_compress import Compress
 from flask_cors import CORS
 
 from flask_jwt_extended import (
-    JWTManager, jwt_required, 
+    JWTManager, jwt_required,
+    jwt_refresh_token_required,
+    get_jwt_identity,
     create_access_token,
     create_refresh_token
 )
@@ -81,6 +83,15 @@ def authenticate():
         }
     else:
         return {}, status.HTTP_401_UNAUTHORIZED
+
+@app.route("/authenticate/refresh", methods=['POST'])
+@jwt_refresh_token_required
+def refresh():
+    # retrive the user's identity from the refresh token using a Flask-JWT-Extended built-in method
+    current_user = get_jwt_identity()
+    # return a non-fresh token for the user
+    new_token = create_access_token(identity=current_user, fresh=False)
+    return {'access_token': new_token}, 200
 
 @app.route("/secret")
 @jwt_required
