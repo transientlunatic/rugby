@@ -13,7 +13,8 @@ Time-matrix plots can be produced for any tournament, showing the time each play
 
 .. plot::
 
-   from rugby.data import Tournament
+   import rugby
+   from rugby.tournament import Tournament
    import rugby.plotting
    import pandas as pd
 
@@ -21,8 +22,7 @@ Time-matrix plots can be produced for any tournament, showing the time each play
    import matplotlib.pyplot as plt
    plt.style.use(rugby.plotting.style)
 
-   tournament = Tournament("Super Rugby Aotearoa", "2020", pd.read_json("/home/daniel/repositories/snippets/superrugby/superrugby_nz.json"))
-
+   tournament = Tournament.from_json(f"{rugby.__path__[0]}/json_data/super-rugby-aotearoa-2020.json")
    
    team = "Highlanders"
    f, ax = plt.subplots(1,1, sharey=True, figsize=(1.5,6), dpi=300)
