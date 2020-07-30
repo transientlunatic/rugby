@@ -39,7 +39,11 @@ session_factory = sessionmaker(bind=engine)
 from flask_sqlalchemy_session import flask_scoped_session
 session = flask_scoped_session(session_factory, app)
 
-rugby.models.User.__table__.drop(engine)
+try:
+    rugby.models.User.__table__.drop(engine)
+except:
+    pass
+
 rugby.models.User.__table__.create(engine)
 rugby.models.User.create_user("Daniel Williams", "daniel", "daniel", session=session)
 
@@ -67,7 +71,6 @@ def authenticate():
     Authenticate the user and issue a JWT.
     """
     data = request.data
-    print(set(data.keys()) < {"username"})
     if set(data.keys()) < {"username", "password"}:
         return {}, status.HTTP_400_BAD_REQUEST
 
@@ -183,6 +186,25 @@ def league_table(tournament, season):
                              "url": url_for("team", shortname=row.team.short_name.replace(" ", "_"), _external=False)}
         })
     return out
+
+@app.route("/seasons/<tournament>/<season>/matches/<team1>/<team2>/")
+def season_derbies(tournament, season, team1, team2):
+    tournament = " ".join(tournament.split("_"))
+    season = " ".join(season.split("_"))
+    team2 = " ".join(team2.split("_"))
+    team1 = " ".join(team1.split("_"))
+    tournament = rugby.models.Season.from_query(tournament=tournament, season=season)
+    matches = []
+    for match in tournament.matches:
+        if {match.teams['home'].short_name, match.teams['away'].short_name} == {team1, team2}:
+            matches.append({"home": match.teams['home'].short_name,
+                            "away": match.teams['away'].short_name,
+                            "date": match.date.isoformat(),
+                            "score": match.score,
+                            "url": url_for("match", home=match.teams['home'].short_name, away=match.teams['away'].short_name, date=f"{match.date:%Y-%m-%d}",  _external=False)})
+    
+    return matches
+
         
 @app.route("/teams/")
 def teams():
@@ -198,6 +220,7 @@ def team(shortname):
     shortname = shortname.replace("_", " ")
     team = rugby.models.Team.from_query(shortname)
     return {"name": team.name,
+            "url": url_for("team", shortname=team.shortname),
             "country": team.country,
             "colors": {"primary": f"#{team.color_primary}"},
             "short name": team.shortname}
