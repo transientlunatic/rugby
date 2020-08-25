@@ -42,6 +42,7 @@ jobs:
           cd data.daniel-williams.co.uk
           source bin/activate
           pip install -U $WHEEL
+          export RUGBYDB="/home/${{ secrets.SSHUSER}}/data.daniel-williams.co.uk/database/rugby.db"
           python migrations.py
           touch tmp/restart.txt
           rm rugby*.whl

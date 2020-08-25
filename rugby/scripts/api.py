@@ -247,8 +247,9 @@ def league_table(tournament, season):
     out = []
     for i, row in table.iterrows():
         
-        out.append({
+        pos = {
             "position": i+1,
+            "conference": row.conference,
             "played": row.played,
             "points": row.points,
             "won": row.won,
@@ -259,7 +260,9 @@ def league_table(tournament, season):
             "against": row['against'],
             "team": {"name": row.team.short_name,
                              "url": url_for("team", shortname=row.team.short_name.replace(" ", "_"), _external=False)}
-        })
+        }
+        out.append(pos)
+        
     return out
 
 @app.route("/matches/<team1>/<team2>/")
