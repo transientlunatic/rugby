@@ -1,3 +1,6 @@
+sphinx
 matplotlib
 ipython
 numpydoc
+sphinxcontrib-httpdomain
+
