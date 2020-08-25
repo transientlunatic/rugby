@@ -44,6 +44,7 @@ jobs:
           pip install -U $WHEEL
           python migrations.py
           touch tmp/restart.txt
+          rm rugby*.whl
 
     - name: Build HTML Docs
       run: |
