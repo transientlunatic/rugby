@@ -203,16 +203,39 @@ def season(tournament, season):
                                        home=match.teams['home'].short_name.replace(" ", "_").replace("/", "~"),
                                        away=match.teams['away'].short_name.replace(" ", "_").replace("/", "~"), date=f"{match.date:%Y-%m-%d}",  _external=False)})
 
-        
-    return {"matches": matches,
+    conferences = tournament.team_conferences
+    if len(conferences.keys())>0:
+        teams = [{"name": team.short_name,
+              "conference": conferences[team.short_name],
+                  "url": url_for("team", shortname=team.short_name.replace(" ", "_").replace("/", "~"), _external=False)} for team in tournament.teams()]
+    else:
+        teams = [{"name": team.short_name,
+                  "url": url_for("team", shortname=team.short_name.replace(" ", "_").replace("/", "~"), _external=False)} for team in tournament.teams()]
+    output =  {"matches": matches,
             "tournament": tournament.name,
             "season": tournament.season,
             "table": url_for("league_table", tournament=tournament.name.replace(" ", "_"), season=tournament.season),
-            "teams": [{"name": team.short_name,
-                       "url": url_for("team", shortname=team.short_name.replace(" ", "_").replace("/", "~"), _external=False)} for team in tournament.teams()]
+            "teams": teams
             }
+
+    if len(conferences.keys())>0:
+        output['conferences'] = conferences
+    
+    return output
     #return tournament.to_json()
 
+@app.route("/seasons/<tournament>/<season>/conferences", methods=["GET", "POST"])
+def conferences(tournament, season):
+    """The conferences for this season of this tournament."""
+    tournament = " ".join(tournament.split("_"))
+    season = " ".join(season.split("_"))
+    if request.method == "POST":
+        rugby.models.ConferenceMap.add(tournament, season, request.data)
+        return {}
+    elif request.method=="GET":
+        season = rugby.models.Season.from_query(tournament=tournament, season=season)
+        return season.team_conferences
+    
 @app.route("/seasons/<tournament>/<season>/table")
 def league_table(tournament, season):
     """The league table for a given tournament."""

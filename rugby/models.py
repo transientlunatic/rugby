@@ -166,12 +166,19 @@ class Season(Base):
 
         if season:
             season = session.query(Season).filter_by(name=season, tournament=tournament.id).one()
-        
+
+            conferences = ConferenceMap.for_season(season)
+            
             tournament = rugby.data.Tournament(
                 name=tournament.name,
                 season=season.name, 
                 matches=season.matches(session))
             tournament.season_id = season.id
+            
+            tournament.team_conferences = conferences
+
+            
+            
             return tournament
         else:
             seasons = session.query(Season).filter_by(tournament=tournament.id).all()
@@ -186,6 +193,36 @@ class Season(Base):
         matches = [match.to_dict(session) for match in matches]
         return matches
 
+class ConferenceMap(Base):
+    __tablename__ = "conference_map"
+    id = Column(Integer, primary_key=True)
+    season = Column(Integer, ForeignKey("season.id"))
+    team = Column(Integer, ForeignKey("team.id"))
+    conference = Column(String(255), nullable=False)
+
+    @classmethod
+    def for_season(cls, season):
+        print("for_season", season)
+        teams = session.query(cls).filter_by(season=season.id).all()
+        mapping = {}
+        mapping = {Team.get(team.team).shortname : team.conference for team in teams}
+        return mapping
+
+    @classmethod
+    def add(cls, tournament, season, mapping):
+        """
+        Add a dictionary of teams and conferences to the model.
+        """
+        tournament_id = session.query(Tournament).filter_by(name=tournament).one().id
+        season_id = session.query(Season).filter_by(name=season, tournament=tournament_id).one().id
+        for team, conference in mapping.items():
+            team_id = session.query(Team).filter_by(shortname=team).one().id
+            mapping = cls(season=season_id, team=team_id, conference=conference)
+            session.add(mapping)
+        session.commit()
+            
+        
+    
 class Team(Base):
     __tablename__ = "team"
     id = Column(Integer, primary_key=True)

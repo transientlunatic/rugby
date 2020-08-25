@@ -30,9 +30,6 @@ jobs:
         echo '::set-env name=WHEEL::$(ls *.whl)'
     - name: SSH Deploy
       uses: cross-the-world/ssh-scp-ssh-pipelines@latest
-      env:
-        WELCOME: "ssh scp ssh pipelines"
-        LASTSSH: "Doing something after copying"
       with:
         host: ${{ secrets.SSHHOST }}
         user: ${{ secrets.SSHUSER }}
@@ -40,10 +37,12 @@ jobs:
         connect_timeout: 10s
         scp: |
           './dist/*' => /home/${{ secrets.SSHUSER }}/data.daniel-williams.co.uk/
+          'migrations.py' => /home/${{ secrets.SSHUSER }}/data.daniel-williams.co.uk/
         last_ssh: |
           cd data.daniel-williams.co.uk
           source bin/activate
           pip install -U $WHEEL
+          python migrations.py
           touch tmp/restart.txt
 
     - name: Build HTML Docs
