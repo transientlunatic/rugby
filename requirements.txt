@@ -13,5 +13,3 @@ flask-jwt-extended
 sqlalchemy
 flask_sqlalchemy_session
 bcrypt
-matplotlib
-ipython
