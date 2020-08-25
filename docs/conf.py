@@ -14,7 +14,7 @@
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
 
-import sphinx_daniel_theme
+import kentigern
 
 # -- Project information -----------------------------------------------------
 
@@ -54,8 +54,8 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'daniel'
-html_theme_path = sphinx_daniel_theme.get_html_theme_path()
+html_theme = 'kentigern'
+html_theme_path = kentigern.get_html_theme_path()
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
