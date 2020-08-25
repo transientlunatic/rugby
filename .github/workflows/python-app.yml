@@ -33,7 +33,7 @@ jobs:
       with:
         host: ${{ secrets.SSHHOST }}
         user: ${{ secrets.SSHUSER }}
-        pass: ${{ secrets.SSHKEY }}
+        key: ${{ secrets.SSHKEY }}
         connect_timeout: 10s
         scp: |
           './dist/*' => /home/${{ secrets.SSHUSER }}/data.daniel-williams.co.uk/
