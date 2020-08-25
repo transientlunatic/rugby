@@ -89,7 +89,7 @@ def add_metadata(filename, **metadata):
     with open(filename, "r") as f:
         data = json.load(f)
     if not "matches" in data.keys():
-        output['matches'] = [row for row in data]
+        output['matches'] = [match for match in data]
     else:
         output = data
     for key, value in metadata.items():

@@ -161,11 +161,12 @@ class Tournament():
         Return a set of all of the teams which had matches in this tournament.
         """
         if not hasattr(self, "team_list"):
-            teams =  list(set(chain.from_iterable((x.teams['home'], x.teams['away']) for x in self.matches)))
-            if isinstance(teams[0], Team):
-                return teams
-            else:
-                return [Team(team, {"primary": "#000000"}, team, None) for team in teams]
+            teams =  list(set(chain.from_iterable((x.teams['home'], x.teams['away']) for x in self.matches+self.future)))
+            if len(teams)>0:
+                if isinstance(teams[0], Team):
+                    return teams
+                else:
+                    return [Team(team, {"primary": "#000000"}, team, None) for team in teams]
         else:
             return self.team_list
 

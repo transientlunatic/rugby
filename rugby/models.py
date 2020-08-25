@@ -76,6 +76,18 @@ class Tournament(Base):
     __tablename__ = 'tournament'
     id = Column(Integer, primary_key=True)
     name = Column(String(250), nullable=False)
+
+    def to_dict(self):
+        return {"name": self.name}
+
+    @classmethod
+    def update(cls, name, data, session=session):
+        tournament = Tournament.from_query(name, session)
+        if 'name' in data:
+            tournament.name = data['name']
+        session.commit()
+        return tournament
+    
     @classmethod
     def all(cls, session=session):
         return session.query(cls).all()
@@ -85,13 +97,29 @@ class Tournament(Base):
             return session.query(cls).filter_by(id=id).one()
         except NoResultFound:
             return None
+        
+    @classmethod
+    def from_query(self, name, session=session):
+        tournament = session.query(Tournament).filter_by(name=name).one()
+        return tournament
+
+    @classmethod
+    def remove(cls, name, session=session):
+        tournaments = session.query(Tournament).filter_by(name=name).all()
+        for tournament in tournaments:
+            session.delete(tournament)
+        session.commit()
+        return {}
     
     @classmethod
     def add(self, tournament,  session=session):
         try:
-            tournament = session.query(Tournament).filter_by(name=tournament.name).one()
+            if isinstance(tournament, rugby.data.Tournament):
+                tournament = session.query(Tournament).filter_by(name=tournament.name).one()
+            else:
+                tournament = session.query(Tournament).filter_by(name=tournament['name']).one()
         except NoResultFound:
-            tournament = Tournament(name=tournament.name)
+            tournament = Tournament(name=tournament['name'])
             session.add(tournament)
             session.commit()
         return tournament
@@ -102,6 +130,18 @@ class Season(Base):
     name = Column(String(250), nullable=False)
     tournament = Column(Integer, ForeignKey("tournament.id"))
 
+    def to_dict(self):
+        return {"name": self.name,
+                "tournament": Tournament.get(self.tournament).to_dict()
+        }
+    
+    @classmethod
+    def get(cls, id):
+        try:
+            return session.query(cls).filter_by(id=id).one()
+        except NoResultFound:
+            return None
+    
     @classmethod
     def all(cls, session=session):
         return session.query(cls).all()
@@ -110,9 +150,12 @@ class Season(Base):
     def add(self, tournament, session=session):
         tournament_id = Tournament.add(tournament).id
         try:
-            season = session.query(Season).filter_by(name=tournament.season, tournament=tournament_id).one()
+            if isinstance(tournament, rugby.data.Tournament):
+                season = session.query(Season).filter_by(name=tournament.season, tournament=tournament_id).one()
+            else:
+                season = session.query(Season).filter_by(name=tournament['season'], tournament=tournament_id).one()
         except NoResultFound:
-            season = Season(name=tournament.season, tournament=tournament_id)
+            season = Season(name=tournament['season'], tournament=tournament_id)
             session.add(season)
             session.commit()
         return season
@@ -124,10 +167,12 @@ class Season(Base):
         if season:
             season = session.query(Season).filter_by(name=season, tournament=tournament.id).one()
         
-            return rugby.data.Tournament(
+            tournament = rugby.data.Tournament(
                 name=tournament.name,
                 season=season.name, 
                 matches=season.matches(session))
+            tournament.season_id = season.id
+            return tournament
         else:
             seasons = session.query(Season).filter_by(tournament=tournament.id).all()
             return [rugby.data.Tournament(
@@ -152,23 +197,60 @@ class Team(Base):
     country = Column(String(250), nullable=False)
 
     @classmethod
+    def get(cls, id):
+        try:
+            return session.query(cls).filter_by(id=id).one()
+        except NoResultFound:
+            return None
+    
+    @classmethod
     def all(self):
         return session.query(Team).all()
     
     @classmethod
-    def from_query(self, shortname, session=session):
-        return session.query(Team).filter_by(shortname=shortname).one()
+    def from_query(cls, shortname, session=session):
+        return session.query(cls).filter_by(shortname=shortname).one()
+
+    @classmethod
+    def remove(cls, shortname, session=session):
+        team = Team.from_query(shortname)
+        session.delete(team)
+        session.commit()
     
     @classmethod
-    def add(self, team, session=session):
+    def update(cls, shortname, data, session=session):
+        team = Team.from_query(shortname)
+        if 'name' in data:
+            team.name = str(data['name']).replace("/", "-").strip()
+        if 'shortname' in data:
+            team.shortname = str(data['shortname']).replace("/", "~").strip()
+        if 'color_primary' in data:
+            team.color_primary = str(data['color_primary']).strip("#").strip()
+        if 'color_secondary' in data:
+            team.color_secondary = str(data['color_secondary']).strip("#").strip()
+        session.commit()
+        return team
+    
+    @classmethod
+    def add(cls, data, session=session):
         """
         Add a team to the database if it doesn't exist already.
         Return its ID.
         """
         try:
-            team = Team.from_query(team.short_name)
+            if isinstance(data, rugby.data.Team):
+                team = Team.from_query(data.short_name)
+            else:
+                team = Team.from_query(shortname=data['short_name'])
         except NoResultFound:
-            team = Team(name=team.name, shortname=team.short_name)
+            print("C")
+            team = cls(name=data['name'],
+                        shortname=data['short_name'],
+                        color_primary=data['color_primary'],
+                        color_secondary=data['color_secondary'],
+                        color_extra=data['color_extra'],
+                        country=data['country']
+            )
             session.add(team)
             session.commit()
         return team
@@ -196,9 +278,48 @@ class Match(Base):
     def all(self):
         return [rugby.data.Match(match.to_dict(session)).to_rest()
                 for match in session.query(Match).all()]
+
+    @classmethod
+    def remove(cls, home, away, date, session=session):
+        date = datetime.strptime(date, "%Y-%m-%d")
+        home = Team.from_query(home, session).id
+        away = Team.from_query(away, session).id
+        match = session.query(Match).filter(
+            Match.date.between(date, date+timedelta(days=1))).filter_by(home=home, away=away).one()
+
+        session.delete(match)
+        session.commit()
+        
+    @classmethod
+    def update(cls, home, away, date, data, session=session):
+        date = datetime.strptime(date, "%Y-%m-%d")
+        home = Team.from_query(home, session).id
+        away = Team.from_query(away, session).id
+        match = session.query(Match).filter(
+            Match.date.between(date, date+timedelta(days=1))).filter_by(home=home, away=away).one()
+        
+        if 'date' in data:
+            match.date = datetime.strptime(data['date'], "%Y-%m-%d")
+        if ('season' in data) and ('tournament' in data):
+            season = Season.from_query(season=data['season'],
+                                             tournament=data['tournament'],
+                                             session=session).season_id
+            print(season)
+            match.season = int(season)
+        if 'home_team' in data:
+            match.home = Team.from_query(data['home_team'], session).id
+        if 'away_team' in data:
+            match.away = Team.from_query(data['away_team'], session).id
+        if 'home_score' in data:
+            match.home_score = float(data['home_score'])
+        if 'away_score' in data:
+            match.away_score = float(data['away_score'])
+        session.commit()
+        return rugby.data.Match(match.to_dict(session))
+
     
     @classmethod
-    def from_query(self, home, away, date=None, session=session):
+    def from_query(self, home, away, date=None, limit=30, session=session):
         
         home = Team.from_query(home, session).id
         away = Team.from_query(away, session).id
@@ -214,10 +335,35 @@ class Match(Base):
 
         else:
             matches = session.query(Match).filter(
-                (Match.home.in_([home, away]) & (Match.away.in_([home, away]))))
+                (Match.home.in_([home, away]) & (Match.away.in_([home, away])))).order_by(Match.date.desc()).limit(limit)
             return [rugby.data.Match(match.to_dict(session)).to_rest() for match in matches]
 
+    @classmethod
+    def add_dict(self, match):
+        """
+        Add a match object to the database.
+        """
+        tournament = session.query(Tournament).filter_by(name=match['tournament']).one()
+        season = session.query(Season).filter_by(tournament=tournament.id, name=match['season']).one()
+        home = Team.from_query(match['home_team'])
+        away = Team.from_query(match['away_team'])
 
+        try:
+            match = session.query(Match).filter_by(date=match['date'], home=home.id, away=away.id, season=season.id).one()
+        except NoResultFound:
+
+            date=datetime.strptime(match['date'], "%Y-%m-%d")
+            
+            match = Match(date=date,
+                 season=season.id,
+                  home=home.id,
+                  away=away.id,
+                  home_score = match['home_score'],
+                          away_score = match['away_score'],
+                 )
+            session.add(match)
+            session.commit()
+        return match
     
     @classmethod
     def add(self, match):
@@ -244,16 +390,19 @@ class Match(Base):
         return match
     
     def to_dict(self, session=session):
+        season = Season.get(self.season)
+        tournament = Tournament.get(season.tournament)
         home = rugby.data.Team(**session.query(Team).filter_by(id=self.home).one().to_dict())
         away = rugby.data.Team(**session.query(Team).filter_by(id=self.away).one().to_dict())
         if self.home_score:
-            home=dict(score=self.home_score, team=home)
-            away=dict(score=self.away_score, team=away)
+            home=dict(score=self.home_score, team=home.to_dict())
+            away=dict(score=self.away_score, team=away.to_dict())
         else:
-            home=dict(team=home, score=float('nan'))
-            away=dict(team=away, score=float('nan'))
+            home=dict(team=home.to_dict(), score=float('nan'))
+            away=dict(team=away.to_dict(), score=float('nan'))
         return dict(date=self.date, 
-                    season=self.season,
+                    season=season.name,
+                    tournament=tournament.name,
                     stadium=None,
                     home=home, 
                     away=away)
@@ -275,6 +424,17 @@ class Player(Base):
         except NoResultFound:
             return None
 
+    @property
+    def name(self):
+        return f"{self.firstname} {self.surname}"
+        
+    @property
+    def to_dict(self):
+        return {"name": f"{self.firstname} {self.surname}",
+                "firstname": self.firstname,
+                "surname": self.surname,
+                "country": self.country}
+        
     @property
     def name(self):
         return f"{self.firstname} {self.surname}"
@@ -338,12 +498,18 @@ class Position(Base):
                     off = [80]
                 else:
                     off = position.off
+            print(on, off)
+            try:
+                time_ranges = sorted(on + off)
+            except:
+                time_ranges = []
                 
             out.append({
                 "number": position.number,
                 "player": Player.get(position.player),
                 "on": on,
                 "off": off,
+                "time_ranges": time_ranges,
                 "team": position.team
                 })
         
@@ -367,10 +533,126 @@ class Position(Base):
         player = Player.from_query(firstname=firstname, surname=surname, session=session)
         team = Team.from_query(shortname=team, session=session)
         try:
-            
             position = session.query(cls).filter_by(match=match, team=team.id, player=player.id, number=number).one()
         except NoResultFound:
             position = cls(match=match, team=team.id, player=player.id, number=number, on=on, off=off, reds=reds, yellows=yellows)
             session.add(position)
             session.commit()
         return position
+
+class EventType(Base):
+    __tablename__ = "event_type"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(250), unique=True)
+    score = Column(Integer, nullable=True)
+    
+    @classmethod
+    def get(cls, id):
+        try:
+            return session.query(cls).filter_by(id=id).one()
+        except NoResultFound:
+            return None
+        
+    @classmethod
+    def add(cls, name, score=None,  session=session):
+        try:
+            event_type = session.query(cls).filter_by(name=name).one()
+        except NoResultFound:
+            event_type = EventType(name=name, score=score)
+            session.add(event_type)
+            session.commit()
+        return event_type
+
+    @classmethod
+    def from_query(cls, name, session=session):
+        return session.query(cls).filter_by(name=name).one()
+    
+class Event(Base):
+    __tablename__ = "event"
+    id = Column(Integer, primary_key=True)
+    type = Column(Integer, ForeignKey("event_type.id"))
+    time = Column(Integer, nullable=True)
+    team = Column(Integer, ForeignKey("team.id"))
+    match = Column(Integer, ForeignKey("match.id"))
+    player = Column(Integer, ForeignKey("player.id"), nullable=True)
+    score = Column(Integer, nullable=True)
+
+    @classmethod
+    def get(cls, idn, session=session):
+        try:
+            idn = int(idn)
+            print(type(idn))
+            return session.query(cls).filter_by(id=idn).one()
+        except NoResultFound:
+            return None
+    
+    def to_rest(self):
+        event_data = {"type": EventType.get(self.type).name,
+                      "team": Team.get(self.team).shortname,
+                      "time": self.time}
+        if self.player:
+           event_data["player"] = Player.get(self.player).name
+        if self.score:
+            event_data["score"] = self.score
+        event_data['id'] = self.id
+        return event_data
+    
+    @classmethod
+    def add(cls, home, away, date, team, event_type, time=None, player=None,  score=None,  session=session):
+        match = Match.from_query(home=home, away=away, date=date)
+        team = Team.from_query(shortname=team)
+        event_type = EventType.from_query(name=event_type)
+        if player:
+            player = Player.from_query(surname=player.split(" ")[1], firstname=player.split(" ")[0])
+            player_id=player.id
+        else:
+            player_id=None
+        try:
+            if not player:
+                event = session.query(cls).filter_by(match=match.id, time=time, team=team.id, type=event_type.id).one()
+            else:
+                event = session.query(cls).filter_by(match=match.id, time=time, team=team.id, type=event_type.id, player=player.id).one()
+        except NoResultFound:
+            event = cls(type=event_type.id, time=time, team=team.id, match=match.id, player=player_id, score=score)
+            session.add(event)
+            session.commit()
+        return event
+
+    @classmethod
+    def add_dict(cls, data, session=session):
+        all_data = dict(
+            time = None,
+            player = None,
+            score = None,
+            )
+        all_data.update(data)
+        return cls.add(session=session, **data)
+        
+    
+    @classmethod
+    def from_query(cls, session=session, **kwargs):
+        if {"home", "away", "date"} <= set(kwargs.keys()):
+            match = Match.from_query(home=kwargs['home'], away=kwargs['away'], date=kwargs['date'])
+            events = session.query(cls).filter_by(match=match.id).all()
+        else:
+            return {}
+        out = []
+        for event in events:
+            out.append(event.to_rest())
+        return out
+
+    @classmethod
+    def update(cls, idnumber, data, session=session):
+        event = Event.get(idnumber, session)
+        team = Team.from_query(shortname=data['team'])
+        event_type = EventType.from_query(name=data['type'])
+        
+        event.type = event_type.id
+        event.team = Team.from_query(shortname=data['team']).id
+        event.time = data['time']
+        # if self.player:
+        #    event_data["player"] = Player.from_query(self.player).id
+        if data['score']:
+            event.score = data['score']
+        session.commit()
+        return event

@@ -195,7 +195,7 @@ def download_json(season, league,
         if game:
             games = games.append(game, ignore_index=True)
     print(f"Downloaded {number} new results")
-    with open(rugby.__path__[0]+"/json/{}-{}.json".format(league, season), 'w') as f:
+    with open(rugby.__path__[0]+"/json_data/{}-{}.json".format(league, season), 'w') as f:
         json.dump(games.to_dict(), f, default=json_serial)
 
 
@@ -252,5 +252,5 @@ def download_fixtures(season, league,
             number += 1
             games = games.append(game, ignore_index=True)
     print(f"Downloaded {number} new fixtures")
-    with open(rugby.__path__[0]+"/json/{}-fixtures.json".format(league), 'w') as f:
-        json.dump(games.to_dict(), f, default=json_serial)
+    with open(rugby.__path__[0]+"/json_data/{}-fixtures.json".format(league), 'w') as f:
+        json.dump(games.T.to_dict(), f, default=json_serial)

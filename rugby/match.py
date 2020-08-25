@@ -23,7 +23,7 @@ class Match(object):
         """
 
 
-        if row['home']['score'] in ["C", "P"]:
+        if row['home']['score'] in ["C", "P", ""]:
             self.score = {"home": float("nan"), "away": float("nan")}
 
         else:
@@ -55,6 +55,9 @@ class Match(object):
         if not isinstance(tournament, type(None)):
             self.season = tournament.season
             self.tournament = tournament.name
+        elif "season" in row:
+            self.season = row['season']
+            self.tournament = row['tournament']
         else:
             self.season = None
             self.tournament = None
@@ -113,6 +116,7 @@ class Match(object):
             else:
                 data[state]['team'] = self.teams[state]
             data[state]['score'] = self.score[state]
+
             if hasattr(self, "lineups"):
                 data[state]['lineup'] = self.lineups[state].to_dict()
             if hasattr(self, "scores") and self.scores != None:
@@ -140,15 +144,23 @@ class Match(object):
     def to_rest(self):
         home = self.teams['home'].short_name
         away = self.teams['away'].short_name
+
+        if pd.isna(self.score['home']):
+                score = None
+        else:
+            score = self.score
         
         return dict(date=self.date, 
                     season=self.season,
+                    tournament=self.tournament,
                     url=url_for("match", home=home, away=away,
                                 date=f"{self.date:%Y-%m-%d}",
                                 _external=False),
-                    lineups=url_for("lineup", home=home, away=away, date=f"{self.date:%Y-%m-%d}", _external=False), 
+                    lineups=url_for("lineup", home=home, away=away, date=f"{self.date:%Y-%m-%d}", _external=False),
+                    events=url_for("events", home=home, away=away, date=f"{self.date:%Y-%m-%d}", _external=False), 
                     stadium=None,
-                    score = self.score,
+                    
+                    score = score,
                     home={"name": home,
                           "url": url_for("team", shortname=home, _external=False)}, 
                     away={"name": away,
