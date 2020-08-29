@@ -1,0 +1,6 @@
+* Project Todos
+  :PROPERTIES:
+  :category: openrugby
+  :END:
+** TODO Add permutation analysis
+** TODO Add support for points deductions
