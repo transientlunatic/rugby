@@ -8,7 +8,7 @@ Accessing the API
 
 You can access the API at
 ::
-   https://data.daniel-williams.co.uk
+   https://data.daniel-williams.co.uk/rugby
 
 
 
