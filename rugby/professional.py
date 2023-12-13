@@ -18,9 +18,11 @@ def json_serial(obj):
         return obj.isoformat()
     raise TypeError ("Type %s not serializable" % type(obj))
 
-def process_game_page(url, season = "2016-2017", season_range=[8,7]):
-    years = season.split("-")
-    years = [int(year.strip()) for year in years]
+def process_game_page(url, season = None, season_range=[8,7]):
+    
+    if season:
+        years = season.split("-")
+        years = [int(year.strip()) for year in years]
     
     match = {}
     
@@ -140,15 +142,18 @@ def process_team_details(teamdetails):
                          "value": value, "minute": int(minute)})
     return scoresdic
 
-def get_match_list(league, season, base = "http://www.skysports.com/rugby-union/competitions"):
+def get_match_list(league, season, base = "http://www.skysports.com/rugby-union/competitions", use_recent=False):
     """
     Attempts to fetch a list of URLs for matches in a given season, and return them as a list.
     """
     
     league = "-".join(league.split())
     
-    season = season.split("-")
-    season = "-".join([season[0], season[1][2:]])
+    if not use_recent:
+        season = season.split("-")
+        season = "-".join([season[0], season[1][2:]])
+    else:
+        season=""
     
     url = "{}/{}/results/{}".format(base, league.lower(), season)
     print(url)
@@ -170,8 +175,10 @@ def get_match_list(league, season, base = "http://www.skysports.com/rugby-union/
     return urls
 
 def download_json(season, league, 
-                  base = "http://www.skysports.com/rugby-union/competitions", season_range=[8,7]):
-    urls = get_match_list(league=league, season=season)
+                  base = "http://www.skysports.com/rugby-union/competitions", season_range=[8,7],
+                  use_recent=False,
+                 ):
+    urls = get_match_list(league=league, season=season, use_recent=use_recent)
     
     try:
         games = pandas.read_json(rugby.__path__[0]+"/json/{}-{}.json".format(league, season), dtype=object)
